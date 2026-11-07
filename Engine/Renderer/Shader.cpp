@@ -4,6 +4,8 @@
 #include <sstream>
 #include <iostream>
 
+#include <glm/gtc/type_ptr.hpp>
+
 namespace TC
 {
     Shader::~Shader()
@@ -25,6 +27,7 @@ namespace TC
             {
                 std::cerr << "TC: Cannot open shader: "
                           << path << "\n";
+
                 return std::string{};
             }
 
@@ -47,18 +50,23 @@ namespace TC
             glShaderSource(shader, 1, &code, nullptr);
             glCompileShader(shader);
 
-            GLint success;
+            GLint success = 0;
+
             glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
 
             if (!success)
             {
                 char info[512];
-                glGetShaderInfoLog(shader, 512, nullptr, info);
+
+                glGetShaderInfoLog(
+                    shader, 512, nullptr, info
+                );
 
                 std::cerr << "TC: Shader compilation failed:\n"
                           << info << "\n";
 
                 glDeleteShader(shader);
+
                 return GLuint(0);
             }
 
@@ -72,6 +80,7 @@ namespace TC
         {
             if (vertex) glDeleteShader(vertex);
             if (fragment) glDeleteShader(fragment);
+
             return false;
         }
 
@@ -79,9 +88,11 @@ namespace TC
 
         glAttachShader(program, vertex);
         glAttachShader(program, fragment);
+
         glLinkProgram(program);
 
-        GLint success;
+        GLint success = 0;
+
         glGetProgramiv(program, GL_LINK_STATUS, &success);
 
         glDeleteShader(vertex);
@@ -90,12 +101,16 @@ namespace TC
         if (!success)
         {
             char info[512];
-            glGetProgramInfoLog(program, 512, nullptr, info);
+
+            glGetProgramInfoLog(
+                program, 512, nullptr, info
+            );
 
             std::cerr << "TC: Shader linking failed:\n"
                       << info << "\n";
 
             glDeleteProgram(program);
+
             return false;
         }
 
@@ -112,5 +127,25 @@ namespace TC
     void Shader::Use() const
     {
         glUseProgram(m_Program);
+    }
+
+    void Shader::SetMat4(
+        const std::string& name,
+        const glm::mat4& matrix) const
+    {
+        GLint location = glGetUniformLocation(
+            m_Program,
+            name.c_str()
+        );
+
+        if (location == -1)
+            return;
+
+        glUniformMatrix4fv(
+            location,
+            1,
+            GL_FALSE,
+            glm::value_ptr(matrix)
+        );
     }
 }

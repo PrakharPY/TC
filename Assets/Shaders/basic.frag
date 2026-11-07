@@ -1,8 +1,10 @@
 #version 330 core
 
+in vec3 vertexColor;
+
 out vec4 FragColor;
 
 void main()
 {
-    FragColor = vec4(0.15, 0.75, 0.95, 1.0);
+    FragColor = vec4(vertexColor, 1.0);
 }

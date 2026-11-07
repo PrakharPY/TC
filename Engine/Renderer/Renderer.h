@@ -9,7 +9,7 @@ namespace TC
     public:
         bool Initialize();
 
-        void Render();
+        void Render(float timeSeconds);
 
         void Shutdown();
 
@@ -18,5 +18,6 @@ namespace TC
 
         unsigned int m_VAO = 0;
         unsigned int m_VBO = 0;
+        unsigned int m_EBO = 0;
     };
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glad/glad.h>
+#include <glm/glm.hpp>
 #include <string>
 
 namespace TC
@@ -17,6 +18,7 @@ namespace TC
         );
 
         void Use() const;
+        void SetMat4(const std::string& name, const glm::mat4& matrix) const;
 
     private:
         GLuint m_Program = 0;

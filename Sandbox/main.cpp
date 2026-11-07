@@ -1,7 +1,12 @@
 #include <iostream>
 
+// TC headers first (GLAD is included through Renderer.h)
 #include "Platform/Window.h"
 #include "Renderer/Renderer.h"
+
+// Prevent GLFW from including the OpenGL header
+#define GLFW_INCLUDE_NONE
+#include <GLFW/glfw3.h>
 
 int main()
 {
@@ -10,7 +15,7 @@ int main()
     if (!window.Create(
         1280,
         720,
-        "TC - Lightweight 3D Development Platform"))
+        "TC - 3D Development Platform"))
     {
         return -1;
     }
@@ -22,11 +27,14 @@ int main()
         return -1;
     }
 
-    std::cout << "TC: Application running!\n";
+    std::cout << "TC: 3D application running!\n";
 
     while (!window.ShouldClose())
     {
-        renderer.Render();
+        float currentTime =
+            static_cast<float>(glfwGetTime());
+
+        renderer.Render(currentTime);
 
         window.SwapBuffers();
         window.PollEvents();
