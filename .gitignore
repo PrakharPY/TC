@@ -1,0 +1,33 @@
+# Build directories
+build/
+out/
+cmake-build-*/
+
+# vcpkg
+vcpkg_installed/
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.VC.db
+*.VC.VC.opendb
+
+# Compiled binaries
+*.exe
+*.dll
+*.lib
+*.obj
+*.pdb
+
+# Debug files
+Debug/
+Release/
+x64/
+x86/
+
+# Temporary files
+*.log
+*.tmp
+Thumbs.db
+.DS_Store
