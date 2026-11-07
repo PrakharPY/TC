@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(TC
-    VERSION 0.1.0
+    VERSION 0.2.0
     LANGUAGES CXX
 )
 
@@ -12,22 +12,33 @@ find_package(glfw3 CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(glad CONFIG REQUIRED)
 
-add_executable(TC_Sandbox
-    Sandbox/main.cpp
+add_library(TC STATIC
+
+    Engine/Platform/Window.cpp
+
+    Engine/Renderer/Shader.cpp
+    Engine/Renderer/Renderer.cpp
+
 )
 
-target_link_libraries(TC_Sandbox PRIVATE
+target_include_directories(TC PUBLIC
+    Engine
+)
+
+target_link_libraries(TC PUBLIC
     glfw
     glm::glm
     glad::glad
 )
 
-target_include_directories(TC_Sandbox PRIVATE
-    Engine
+add_executable(TC_Sandbox
+    Sandbox/main.cpp
 )
 
-if(WIN32)
-    target_compile_definitions(TC_Sandbox PRIVATE
-        GLFW_EXPOSE_NATIVE_WIN32
-    )
-endif()
+target_link_libraries(TC_Sandbox PRIVATE
+    TC
+)
+
+set_property(TARGET TC_Sandbox PROPERTY
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)

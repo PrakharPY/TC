@@ -1,59 +1,40 @@
 #include <iostream>
 
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
+#include "Platform/Window.h"
+#include "Renderer/Renderer.h"
 
 int main()
 {
-    if (!glfwInit())
-    {
-        std::cerr << "TC: Failed to initialize GLFW\n";
-        return -1;
-    }
+    TC::Window window;
 
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-    GLFWwindow* window = glfwCreateWindow(
+    if (!window.Create(
         1280,
         720,
-        "TC - Lightweight 3D Development Platform",
-        nullptr,
-        nullptr
-    );
-
-    if (!window)
+        "TC - Lightweight 3D Development Platform"))
     {
-        std::cerr << "TC: Failed to create window\n";
-        glfwTerminate();
         return -1;
     }
 
-    glfwMakeContextCurrent(window);
+    TC::Renderer renderer;
 
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+    if (!renderer.Initialize())
     {
-        std::cerr << "TC: Failed to initialize GLAD\n";
-        glfwDestroyWindow(window);
-        glfwTerminate();
         return -1;
     }
 
-    std::cout << "TC initialized successfully!\n";
-    std::cout << "OpenGL Version: " << glGetString(GL_VERSION) << "\n";
+    std::cout << "TC: Application running!\n";
 
-    while (!glfwWindowShouldClose(window))
+    while (!window.ShouldClose())
     {
-        glClearColor(0.08f, 0.10f, 0.15f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        renderer.Render();
 
-        glfwSwapBuffers(window);
-        glfwPollEvents();
+        window.SwapBuffers();
+        window.PollEvents();
     }
 
-    glfwDestroyWindow(window);
-    glfwTerminate();
+    renderer.Shutdown();
+
+    std::cout << "TC: Application shutting down!\n";
 
     return 0;
 }
