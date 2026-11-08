@@ -19,44 +19,40 @@ namespace TC
             return false;
         }
 
-        // ------------------------------------------------
         // CUBE GEOMETRY
-        // Position (3 floats) + Normal (3 floats)
-        // ------------------------------------------------
-
         float cubeVertices[] =
         {
-            // Front face
+            // Front
             -0.5f, -0.5f,  0.5f,  0, 0, 1,
              0.5f, -0.5f,  0.5f,  0, 0, 1,
              0.5f,  0.5f,  0.5f,  0, 0, 1,
             -0.5f,  0.5f,  0.5f,  0, 0, 1,
 
-            // Back face
+            // Back
              0.5f, -0.5f, -0.5f,  0, 0,-1,
             -0.5f, -0.5f, -0.5f,  0, 0,-1,
             -0.5f,  0.5f, -0.5f,  0, 0,-1,
              0.5f,  0.5f, -0.5f,  0, 0,-1,
 
-            // Left face
+            // Left
             -0.5f, -0.5f, -0.5f, -1, 0, 0,
             -0.5f, -0.5f,  0.5f, -1, 0, 0,
             -0.5f,  0.5f,  0.5f, -1, 0, 0,
             -0.5f,  0.5f, -0.5f, -1, 0, 0,
 
-            // Right face
+            // Right
              0.5f, -0.5f,  0.5f,  1, 0, 0,
              0.5f, -0.5f, -0.5f,  1, 0, 0,
              0.5f,  0.5f, -0.5f,  1, 0, 0,
              0.5f,  0.5f,  0.5f,  1, 0, 0,
 
-            // Top face
+            // Top
             -0.5f,  0.5f,  0.5f,  0, 1, 0,
              0.5f,  0.5f,  0.5f,  0, 1, 0,
              0.5f,  0.5f, -0.5f,  0, 1, 0,
             -0.5f,  0.5f, -0.5f,  0, 1, 0,
 
-            // Bottom face
+            // Bottom
             -0.5f, -0.5f, -0.5f,  0,-1, 0,
              0.5f, -0.5f, -0.5f,  0,-1, 0,
              0.5f, -0.5f,  0.5f,  0,-1, 0,
@@ -80,7 +76,6 @@ namespace TC
         glBindVertexArray(m_CubeVAO);
 
         glBindBuffer(GL_ARRAY_BUFFER, m_CubeVBO);
-
         glBufferData(
             GL_ARRAY_BUFFER,
             sizeof(cubeVertices),
@@ -89,7 +84,6 @@ namespace TC
         );
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_CubeEBO);
-
         glBufferData(
             GL_ELEMENT_ARRAY_BUFFER,
             sizeof(cubeIndices),
@@ -101,7 +95,6 @@ namespace TC
             0, 3, GL_FLOAT, GL_FALSE,
             6 * sizeof(float), (void*)0
         );
-
         glEnableVertexAttribArray(0);
 
         glVertexAttribPointer(
@@ -109,13 +102,9 @@ namespace TC
             6 * sizeof(float),
             (void*)(3 * sizeof(float))
         );
-
         glEnableVertexAttribArray(1);
 
-        // ------------------------------------------------
         // GROUND PLANE
-        // ------------------------------------------------
-
         float planeVertices[] =
         {
             -0.5f, 0.0f, -0.5f,  0, 1, 0,
@@ -124,11 +113,7 @@ namespace TC
             -0.5f, 0.0f,  0.5f,  0, 1, 0
         };
 
-        unsigned int planeIndices[] =
-        {
-            0, 2, 1,
-            0, 3, 2
-        };
+        unsigned int planeIndices[] = { 0, 2, 1, 0, 3, 2 };
 
         glGenVertexArrays(1, &m_PlaneVAO);
         glGenBuffers(1, &m_PlaneVBO);
@@ -137,7 +122,6 @@ namespace TC
         glBindVertexArray(m_PlaneVAO);
 
         glBindBuffer(GL_ARRAY_BUFFER, m_PlaneVBO);
-
         glBufferData(
             GL_ARRAY_BUFFER,
             sizeof(planeVertices),
@@ -146,7 +130,6 @@ namespace TC
         );
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_PlaneEBO);
-
         glBufferData(
             GL_ELEMENT_ARRAY_BUFFER,
             sizeof(planeIndices),
@@ -158,7 +141,6 @@ namespace TC
             0, 3, GL_FLOAT, GL_FALSE,
             6 * sizeof(float), (void*)0
         );
-
         glEnableVertexAttribArray(0);
 
         glVertexAttribPointer(
@@ -166,13 +148,9 @@ namespace TC
             6 * sizeof(float),
             (void*)(3 * sizeof(float))
         );
-
         glEnableVertexAttribArray(1);
 
-        // ------------------------------------------------
         // GRID
-        // ------------------------------------------------
-
         std::vector<float> gridVertices;
 
         for (int i = -10; i <= 10; ++i)
@@ -182,11 +160,8 @@ namespace TC
             gridVertices.insert(gridVertices.end(),
             {
                 -10.0f, 0.015f, position,
-                 10.0f, 0.015f, position
-            });
+                 10.0f, 0.015f, position,
 
-            gridVertices.insert(gridVertices.end(),
-            {
                 position, 0.015f, -10.0f,
                 position, 0.015f,  10.0f
             });
@@ -196,7 +171,6 @@ namespace TC
         glGenBuffers(1, &m_GridVBO);
 
         glBindVertexArray(m_GridVAO);
-
         glBindBuffer(GL_ARRAY_BUFFER, m_GridVBO);
 
         glBufferData(
@@ -210,13 +184,9 @@ namespace TC
             0, 3, GL_FLOAT, GL_FALSE,
             3 * sizeof(float), (void*)0
         );
-
         glEnableVertexAttribArray(0);
 
-        // ------------------------------------------------
         // COORDINATE AXES
-        // ------------------------------------------------
-
         float axisVertices[] =
         {
             -10.0f, 0.02f, 0.0f,
@@ -233,7 +203,6 @@ namespace TC
         glGenBuffers(1, &m_AxisVBO);
 
         glBindVertexArray(m_AxisVAO);
-
         glBindBuffer(GL_ARRAY_BUFFER, m_AxisVBO);
 
         glBufferData(
@@ -247,7 +216,6 @@ namespace TC
             0, 3, GL_FLOAT, GL_FALSE,
             3 * sizeof(float), (void*)0
         );
-
         glEnableVertexAttribArray(0);
 
         glBindVertexArray(0);
@@ -259,39 +227,64 @@ namespace TC
 
     void Renderer::DrawSceneObject(const SceneObject& object)
     {
-        glm::mat4 model = object.GetModelMatrix();
-
-        m_Shader.SetMat4("u_Model", model);
+        m_Shader.SetMat4("u_Model", object.GetModelMatrix());
         m_Shader.SetVec3("u_Color", object.GetColor());
 
         if (object.GetType() == PrimitiveType::Cube)
         {
             glBindVertexArray(m_CubeVAO);
-
-            glDrawElements(
-                GL_TRIANGLES,
-                36,
-                GL_UNSIGNED_INT,
-                nullptr
-            );
+            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, nullptr);
         }
         else if (object.GetType() == PrimitiveType::Plane)
         {
             glBindVertexArray(m_PlaneVAO);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
+        }
+    }
 
-            glDrawElements(
-                GL_TRIANGLES,
-                6,
-                GL_UNSIGNED_INT,
-                nullptr
+    void Renderer::DrawSelectionOutline(const SceneObject& object)
+    {
+        glm::mat4 outlineModel = object.GetModelMatrix();
+
+        // Slightly enlarge the cube to create an outline.
+        outlineModel = glm::scale(
+            outlineModel,
+            glm::vec3(1.025f)
+        );
+
+        m_Shader.SetMat4("u_Model", outlineModel);
+
+        // Bright yellow selection colour.
+        m_Shader.SetVec3(
+            "u_Color",
+            glm::vec3(1.0f, 0.85f, 0.05f)
+        );
+
+        m_Shader.SetInt("u_LightingEnabled", 0);
+
+        glBindVertexArray(m_CubeVAO);
+
+        glLineWidth(2.0f);
+
+        // Each group of four vertices represents one cube face.
+        for (int face = 0; face < 6; ++face)
+        {
+            glDrawArrays(
+                GL_LINE_LOOP,
+                face * 4,
+                4
             );
         }
+
+        glLineWidth(1.0f);
+        m_Shader.SetInt("u_LightingEnabled", 1);
     }
 
     void Renderer::Render(
         const Camera& camera,
         const Scene& scene,
-        float aspectRatio
+        float aspectRatio,
+        int selectedObject
     )
     {
         glClearColor(0.055f, 0.06f, 0.09f, 1.0f);
@@ -304,18 +297,13 @@ namespace TC
         m_Shader.Use();
 
         glm::mat4 view = camera.GetViewMatrix();
-
         glm::mat4 projection =
             camera.GetProjectionMatrix(aspectRatio);
 
         m_Shader.SetMat4("u_View", view);
         m_Shader.SetMat4("u_Projection", projection);
 
-        // Lighting configuration
-        m_Shader.SetVec3(
-            "u_ViewPosition",
-            camera.GetPosition()
-        );
+        m_Shader.SetVec3("u_ViewPosition", camera.GetPosition());
 
         m_Shader.SetVec3(
             "u_LightDirection",
@@ -324,7 +312,7 @@ namespace TC
 
         m_Shader.SetVec3(
             "u_LightColor",
-            glm::vec3(1.0f, 1.0f, 1.0f)
+            glm::vec3(1.0f)
         );
 
         m_Shader.SetFloat("u_AmbientStrength", 0.28f);
@@ -332,7 +320,7 @@ namespace TC
 
         m_Shader.SetInt("u_LightingEnabled", 1);
 
-        // Render scene objects
+        // Draw scene objects.
         glPolygonMode(
             GL_FRONT_AND_BACK,
             m_Wireframe ? GL_LINE : GL_FILL
@@ -343,13 +331,28 @@ namespace TC
             DrawSceneObject(object);
         }
 
-        // Render grid without lighting
+        // Draw selection outline.
+        if (selectedObject >= 0 &&
+            selectedObject < static_cast<int>(scene.GetObjects().size()))
+        {
+            const SceneObject& selected =
+                scene.GetObjects()[selectedObject];
+
+            if (selected.GetType() == PrimitiveType::Cube)
+            {
+                // LEQUAL lets the outline appear on cube edges.
+                glDepthFunc(GL_LEQUAL);
+
+                DrawSelectionOutline(selected);
+
+                glDepthFunc(GL_LESS);
+            }
+        }
+
+        // Draw grid.
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-        glm::mat4 identity(1.0f);
-
-        m_Shader.SetMat4("u_Model", identity);
-
+        m_Shader.SetMat4("u_Model", glm::mat4(1.0f));
         m_Shader.SetInt("u_LightingEnabled", 0);
 
         m_Shader.SetVec3(
@@ -358,33 +361,19 @@ namespace TC
         );
 
         glBindVertexArray(m_GridVAO);
-
         glDrawArrays(GL_LINES, 0, 84);
 
-        // X axis - Red
-        m_Shader.SetVec3(
-            "u_Color",
-            glm::vec3(1.0f, 0.1f, 0.1f)
-        );
-
+        // X axis.
+        m_Shader.SetVec3("u_Color", glm::vec3(1.0f, 0.1f, 0.1f));
         glBindVertexArray(m_AxisVAO);
-
         glDrawArrays(GL_LINES, 0, 2);
 
-        // Y axis - Green
-        m_Shader.SetVec3(
-            "u_Color",
-            glm::vec3(0.1f, 1.0f, 0.1f)
-        );
-
+        // Y axis.
+        m_Shader.SetVec3("u_Color", glm::vec3(0.1f, 1.0f, 0.1f));
         glDrawArrays(GL_LINES, 2, 2);
 
-        // Z axis - Blue
-        m_Shader.SetVec3(
-            "u_Color",
-            glm::vec3(0.1f, 0.3f, 1.0f)
-        );
-
+        // Z axis.
+        m_Shader.SetVec3("u_Color", glm::vec3(0.1f, 0.3f, 1.0f));
         glDrawArrays(GL_LINES, 4, 2);
 
         glBindVertexArray(0);

@@ -26,10 +26,18 @@ namespace TC
         PrimitiveType GetType() const;
         glm::vec3 GetColor() const;
 
+        glm::vec3 GetPosition() const;
+        glm::vec3 GetRotation() const;
+        glm::vec3 GetScale() const;
+
         void SetPosition(const glm::vec3& position);
         void SetRotation(const glm::vec3& rotation);
         void SetScale(const glm::vec3& scale);
         void SetColor(const glm::vec3& color);
+
+        void Translate(const glm::vec3& offset);
+        void Rotate(const glm::vec3& offset);
+        void ScaleBy(float factor);
 
     private:
         PrimitiveType m_Type;

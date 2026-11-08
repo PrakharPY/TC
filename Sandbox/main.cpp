@@ -5,6 +5,9 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
 #include "Platform/Window.h"
 #include "Camera/Camera.h"
 #include "Scene/Scene.h"
@@ -13,11 +16,52 @@
 namespace
 {
     TC::Camera* g_Camera = nullptr;
+    TC::Scene* g_Scene = nullptr;
+
+    int g_SelectedObject = -1;
 
     bool g_FirstMouse = true;
+    bool g_RightMouseDown = false;
 
     float g_LastX = 640.0f;
     float g_LastY = 360.0f;
+
+    bool g_Wireframe = false;
+    bool g_WireframeKeyWasPressed = false;
+    bool g_ResetKeyWasPressed = false;
+
+    glm::vec3 ScreenPointToRay(
+        float mouseX,
+        float mouseY,
+        int windowWidth,
+        int windowHeight,
+        const TC::Camera& camera
+    )
+    {
+        float x = (2.0f * mouseX) / windowWidth - 1.0f;
+        float y = 1.0f - (2.0f * mouseY) / windowHeight;
+
+        glm::vec4 rayClip(x, y, -1.0f, 1.0f);
+
+        glm::mat4 projection =
+            camera.GetProjectionMatrix(
+                static_cast<float>(windowWidth) /
+                static_cast<float>(windowHeight)
+            );
+
+        glm::vec4 rayEye =
+            glm::inverse(projection) * rayClip;
+
+        rayEye.z = -1.0f;
+        rayEye.w = 0.0f;
+
+        glm::vec3 rayWorld =
+            glm::vec3(
+                glm::inverse(camera.GetViewMatrix()) * rayEye
+            );
+
+        return glm::normalize(rayWorld);
+    }
 
     void MouseCallback(
         GLFWwindow* window,
@@ -25,7 +69,7 @@ namespace
         double ypos
     )
     {
-        if (!g_Camera)
+        if (!g_Camera || !g_RightMouseDown)
             return;
 
         if (g_FirstMouse)
@@ -58,7 +102,82 @@ namespace
         }
     }
 
-    void ProcessInput(
+    void MouseButtonCallback(
+        GLFWwindow* window,
+        int button,
+        int action,
+        int mods
+    )
+    {
+        if (button == GLFW_MOUSE_BUTTON_RIGHT)
+        {
+            if (action == GLFW_PRESS)
+            {
+                g_RightMouseDown = true;
+                g_FirstMouse = true;
+
+                glfwSetInputMode(
+                    window,
+                    GLFW_CURSOR,
+                    GLFW_CURSOR_DISABLED
+                );
+            }
+            else if (action == GLFW_RELEASE)
+            {
+                g_RightMouseDown = false;
+
+                glfwSetInputMode(
+                    window,
+                    GLFW_CURSOR,
+                    GLFW_CURSOR_NORMAL
+                );
+            }
+        }
+
+        if (button == GLFW_MOUSE_BUTTON_LEFT &&
+            action == GLFW_PRESS &&
+            !g_RightMouseDown &&
+            g_Camera &&
+            g_Scene)
+        {
+            double mouseX, mouseY;
+
+            glfwGetCursorPos(window, &mouseX, &mouseY);
+
+            int width, height;
+
+            glfwGetWindowSize(window, &width, &height);
+
+            if (width <= 0 || height <= 0)
+                return;
+
+            glm::vec3 rayDirection = ScreenPointToRay(
+                static_cast<float>(mouseX),
+                static_cast<float>(mouseY),
+                width,
+                height,
+                *g_Camera
+            );
+
+            g_SelectedObject =
+                g_Scene->PickObject(
+                    g_Camera->GetPosition(),
+                    rayDirection
+                );
+
+            if (g_SelectedObject >= 0)
+            {
+                std::cout << "TC: Selected object "
+                          << g_SelectedObject << '\n';
+            }
+            else
+            {
+                std::cout << "TC: Selection cleared\n";
+            }
+        }
+    }
+
+    void ProcessCameraInput(
         GLFWwindow* window,
         TC::Camera& camera,
         float deltaTime
@@ -85,6 +204,58 @@ namespace
         if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
             camera.ProcessKeyboard(TC::CameraMovement::Down, deltaTime);
     }
+
+    void ProcessObjectTransform(
+        GLFWwindow* window,
+        TC::Scene& scene,
+        int selectedObject,
+        float deltaTime
+    )
+    {
+        TC::SceneObject* object = scene.GetObject(selectedObject);
+
+        if (!object)
+            return;
+
+        // Translation speed.
+        float moveSpeed = 2.0f * deltaTime;
+
+        if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
+            object->Translate(glm::vec3(-moveSpeed, 0.0f, 0.0f));
+
+        if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+            object->Translate(glm::vec3(moveSpeed, 0.0f, 0.0f));
+
+        if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+            object->Translate(glm::vec3(0.0f, 0.0f, -moveSpeed));
+
+        if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+            object->Translate(glm::vec3(0.0f, 0.0f, moveSpeed));
+
+        if (glfwGetKey(window, GLFW_KEY_PAGE_UP) == GLFW_PRESS)
+            object->Translate(glm::vec3(0.0f, moveSpeed, 0.0f));
+
+        if (glfwGetKey(window, GLFW_KEY_PAGE_DOWN) == GLFW_PRESS)
+            object->Translate(glm::vec3(0.0f, -moveSpeed, 0.0f));
+
+        // Rotation speed.
+        float rotationSpeed = 90.0f * deltaTime;
+
+        if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+            object->Rotate(glm::vec3(0.0f, -rotationSpeed, 0.0f));
+
+        if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+            object->Rotate(glm::vec3(0.0f, rotationSpeed, 0.0f));
+
+        // Scaling.
+        float scaleSpeed = 1.0f * deltaTime;
+
+        if (glfwGetKey(window, GLFW_KEY_MINUS) == GLFW_PRESS)
+            object->ScaleBy(1.0f - scaleSpeed);
+
+        if (glfwGetKey(window, GLFW_KEY_EQUAL) == GLFW_PRESS)
+            object->ScaleBy(1.0f + scaleSpeed);
+    }
 }
 
 int main()
@@ -97,11 +268,11 @@ int main()
     GLFWwindow* nativeWindow = window.GetNativeWindow();
 
     TC::Camera camera;
-    g_Camera = &camera;
-
     TC::Scene scene;
-
     TC::Renderer renderer;
+
+    g_Camera = &camera;
+    g_Scene = &scene;
 
     if (!renderer.Initialize())
     {
@@ -112,20 +283,36 @@ int main()
     glfwSetInputMode(
         nativeWindow,
         GLFW_CURSOR,
-        GLFW_CURSOR_DISABLED
+        GLFW_CURSOR_NORMAL
     );
 
     glfwSetCursorPosCallback(nativeWindow, MouseCallback);
     glfwSetScrollCallback(nativeWindow, ScrollCallback);
+    glfwSetMouseButtonCallback(nativeWindow, MouseButtonCallback);
 
-    std::cout << "TC Milestone 0.5\n";
-    std::cout << "WASD: Move | Mouse: Look | Scroll: Zoom\n";
-    std::cout << "Space/Ctrl: Up/Down | F: Wireframe | R: Reset\n";
+    std::cout << "\nTC Milestone 0.8 - Object Transformation\n\n";
+
+    std::cout << "SELECTION:\n";
+    std::cout << "Left Click: Select object\n";
+    std::cout << "Right Mouse: Hold to look around\n\n";
+
+    std::cout << "TRANSLATION:\n";
+    std::cout << "Arrow Keys: Move X/Z\n";
+    std::cout << "Page Up/Down: Move Y\n\n";
+
+    std::cout << "ROTATION:\n";
+    std::cout << "Q/E: Rotate around Y\n\n";
+
+    std::cout << "SCALING:\n";
+    std::cout << "-/+: Scale down/up\n\n";
+
+    std::cout << "CAMERA:\n";
+    std::cout << "WASD: Move camera\n";
+    std::cout << "Space/Ctrl: Up/Down\n";
+    std::cout << "Scroll: Zoom\n";
+    std::cout << "F: Wireframe | R: Reset camera\n\n";
 
     float lastFrame = 0.0f;
-
-    bool wireframeKeyWasPressed = false;
-    bool resetKeyWasPressed = false;
 
     while (!glfwWindowShouldClose(nativeWindow))
     {
@@ -137,29 +324,36 @@ int main()
         if (deltaTime > 0.1f)
             deltaTime = 0.1f;
 
-        ProcessInput(nativeWindow, camera, deltaTime);
+        ProcessCameraInput(nativeWindow, camera, deltaTime);
 
+        ProcessObjectTransform(
+            nativeWindow,
+            scene,
+            g_SelectedObject,
+            deltaTime
+        );
+
+        // Wireframe toggle.
         bool wireframePressed =
             glfwGetKey(nativeWindow, GLFW_KEY_F) == GLFW_PRESS;
 
-        if (wireframePressed && !wireframeKeyWasPressed)
+        if (wireframePressed && !g_WireframeKeyWasPressed)
         {
-            static bool wireframe = false;
-            wireframe = !wireframe;
-
-            renderer.SetWireframe(wireframe);
+            g_Wireframe = !g_Wireframe;
+            renderer.SetWireframe(g_Wireframe);
 
             std::cout << "TC: Wireframe "
-                      << (wireframe ? "ON" : "OFF")
+                      << (g_Wireframe ? "ON" : "OFF")
                       << '\n';
         }
 
-        wireframeKeyWasPressed = wireframePressed;
+        g_WireframeKeyWasPressed = wireframePressed;
 
+        // Camera reset.
         bool resetPressed =
             glfwGetKey(nativeWindow, GLFW_KEY_R) == GLFW_PRESS;
 
-        if (resetPressed && !resetKeyWasPressed)
+        if (resetPressed && !g_ResetKeyWasPressed)
         {
             camera.Reset();
             g_FirstMouse = true;
@@ -167,7 +361,7 @@ int main()
             std::cout << "TC: Camera reset\n";
         }
 
-        resetKeyWasPressed = resetPressed;
+        g_ResetKeyWasPressed = resetPressed;
 
         int width, height;
 
@@ -185,7 +379,12 @@ int main()
                 static_cast<float>(width) /
                 static_cast<float>(height);
 
-            renderer.Render(camera, scene, aspectRatio);
+            renderer.Render(
+                camera,
+                scene,
+                aspectRatio,
+                g_SelectedObject
+            );
         }
 
         glfwSwapBuffers(nativeWindow);
@@ -195,6 +394,7 @@ int main()
     renderer.Shutdown();
 
     g_Camera = nullptr;
+    g_Scene = nullptr;
 
     std::cout << "TC: Application shutting down!\n";
 

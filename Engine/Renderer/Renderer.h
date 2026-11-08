@@ -14,7 +14,8 @@ namespace TC
         void Render(
             const Camera& camera,
             const Scene& scene,
-            float aspectRatio
+            float aspectRatio,
+            int selectedObject
         );
 
         void SetWireframe(bool enabled);
@@ -23,6 +24,8 @@ namespace TC
 
     private:
         void DrawSceneObject(const SceneObject& object);
+
+        void DrawSelectionOutline(const SceneObject& object);
 
         Shader m_Shader;
 

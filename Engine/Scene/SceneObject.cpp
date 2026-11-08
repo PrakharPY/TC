@@ -58,6 +58,21 @@ namespace TC
         return m_Color;
     }
 
+    glm::vec3 SceneObject::GetPosition() const
+    {
+        return m_Position;
+    }
+
+    glm::vec3 SceneObject::GetRotation() const
+    {
+        return m_Rotation;
+    }
+
+    glm::vec3 SceneObject::GetScale() const
+    {
+        return m_Scale;
+    }
+
     void SceneObject::SetPosition(const glm::vec3& position)
     {
         m_Position = position;
@@ -76,5 +91,26 @@ namespace TC
     void SceneObject::SetColor(const glm::vec3& color)
     {
         m_Color = color;
+    }
+
+    void SceneObject::Translate(const glm::vec3& offset)
+    {
+        m_Position += offset;
+    }
+
+    void SceneObject::Rotate(const glm::vec3& offset)
+    {
+        m_Rotation += offset;
+    }
+
+    void SceneObject::ScaleBy(float factor)
+    {
+        m_Scale *= factor;
+
+        // Prevent zero or negative scale.
+        m_Scale = glm::max(
+            m_Scale,
+            glm::vec3(0.05f)
+        );
     }
 }
