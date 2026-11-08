@@ -31,6 +31,8 @@ namespace
     bool g_Wireframe = false;
     bool g_WireframeKeyWasPressed = false;
     bool g_ResetKeyWasPressed = false;
+    bool g_TranslateKeyWasPressed = false;
+    bool g_RotateKeyWasPressed = false;
 
     glm::vec3 ScreenPointToRay(
         float mouseX,
@@ -151,7 +153,6 @@ namespace
         int mods
     )
     {
-        // Right mouse: camera navigation.
         if (button == GLFW_MOUSE_BUTTON_RIGHT)
         {
             if (action == GLFW_PRESS)
@@ -166,7 +167,6 @@ namespace
             }
         }
 
-        // Left mouse release: finish gizmo dragging.
         if (button == GLFW_MOUSE_BUTTON_LEFT &&
             action == GLFW_RELEASE)
         {
@@ -199,7 +199,6 @@ namespace
         if (width <= 0 || height <= 0)
             return;
 
-        // First check whether we clicked a gizmo axis.
         if (g_SelectedObject >= 0 && g_Gizmo)
         {
             TC::SceneObject* selected =
@@ -243,7 +242,6 @@ namespace
             }
         }
 
-        // Otherwise, perform normal object selection.
         glm::vec3 rayDirection = ScreenPointToRay(
             static_cast<float>(mouseX),
             static_cast<float>(mouseY),
@@ -298,7 +296,8 @@ namespace
         if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
             camera.ProcessKeyboard(TC::CameraMovement::Up, deltaTime);
 
-        if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
+        // C replaces Ctrl for camera-down movement.
+        if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS)
             camera.ProcessKeyboard(TC::CameraMovement::Down, deltaTime);
     }
 
@@ -381,15 +380,44 @@ namespace
         if (width <= 0 || height <= 0)
             return;
 
-        glm::vec3 movement = gizmo.UpdateDrag(
-            *g_Camera,
-            static_cast<float>(mouseX),
-            static_cast<float>(mouseY),
-            width,
-            height
-        );
+        // Ctrl enables grid snapping while dragging.
+        bool snapping =
+            glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
+            glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS;
 
-        object->Translate(movement);
+        if (gizmo.GetMode() == TC::GizmoMode::Translate)
+        {
+            glm::vec3 movement = gizmo.UpdateDrag(
+                *g_Camera,
+                static_cast<float>(mouseX),
+                static_cast<float>(mouseY),
+                width,
+                height,
+                snapping
+            );
+            object->Translate(movement);
+        }
+        else
+        {
+            float rotationDelta = gizmo.UpdateRotationDrag(
+                *g_Camera,
+                static_cast<float>(mouseX),
+                static_cast<float>(mouseY),
+                width,
+                height,
+                snapping
+            );
+
+            glm::vec3 axis(0.0f);
+            switch (gizmo.GetActiveAxis())
+            {
+            case TC::GizmoAxis::X: axis.x = 1.0f; break;
+            case TC::GizmoAxis::Y: axis.y = 1.0f; break;
+            case TC::GizmoAxis::Z: axis.z = 1.0f; break;
+            default: break;
+            }
+            object->Rotate(axis * rotationDelta);
+        }
     }
 }
 
@@ -431,12 +459,15 @@ int main()
     glfwSetScrollCallback(nativeWindow, ScrollCallback);
     glfwSetMouseButtonCallback(nativeWindow, MouseButtonCallback);
 
-    std::cout << "\nTC Milestone 0.9.3 - Interactive Gizmo Dragging\n\n";
+    std::cout << "\nTC Milestone 0.9.5 - Rotation Gizmo\n\n";
 
     std::cout << "Left Click: Select object / Grab gizmo axis\n";
-    std::cout << "Left Mouse Drag: Move along selected axis\n";
+    std::cout << "G: Translation gizmo | T: Rotation gizmo\n";
+    std::cout << "Left Mouse Drag: Transform along selected axis/ring\n";
+    std::cout << "Hold Ctrl: Snap translation to 0.5 units / rotation to 15 degrees\n";
     std::cout << "Right Mouse: Hold to look around\n";
     std::cout << "WASD: Move camera | Scroll: Zoom\n";
+    std::cout << "Space/C: Move camera up/down\n";
     std::cout << "Arrow Keys: Move object X/Z\n";
     std::cout << "Page Up/Down: Move object Y\n";
     std::cout << "Q/E: Rotate | -/+: Scale\n";
@@ -455,6 +486,22 @@ int main()
             deltaTime = 0.1f;
 
         ProcessCameraInput(nativeWindow, camera, deltaTime);
+
+        bool translatePressed = glfwGetKey(nativeWindow, GLFW_KEY_G) == GLFW_PRESS;
+        if (translatePressed && !g_TranslateKeyWasPressed && !gizmo.IsDragging())
+        {
+            gizmo.SetMode(TC::GizmoMode::Translate);
+            std::cout << "TC: Translation gizmo selected\n";
+        }
+        g_TranslateKeyWasPressed = translatePressed;
+
+        bool rotatePressed = glfwGetKey(nativeWindow, GLFW_KEY_T) == GLFW_PRESS;
+        if (rotatePressed && !g_RotateKeyWasPressed && !gizmo.IsDragging())
+        {
+            gizmo.SetMode(TC::GizmoMode::Rotate);
+            std::cout << "TC: Rotation gizmo selected\n";
+        }
+        g_RotateKeyWasPressed = rotatePressed;
 
         if (gizmo.IsDragging())
         {
