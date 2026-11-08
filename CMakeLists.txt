@@ -16,6 +16,8 @@ add_library(TC STATIC
 
     Engine/Platform/Window.cpp
 
+    Engine/Camera/Camera.cpp
+
     Engine/Renderer/Shader.cpp
     Engine/Renderer/Renderer.cpp
 

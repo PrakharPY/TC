@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Shader.h"
+#include "../Camera/Camera.h"
 
 namespace TC
 {
@@ -9,7 +10,12 @@ namespace TC
     public:
         bool Initialize();
 
-        void Render(float timeSeconds);
+        void Render(
+            const Camera& camera,
+            float aspectRatio
+        );
+
+        void SetWireframe(bool enabled);
 
         void Shutdown();
 
@@ -19,5 +25,7 @@ namespace TC
         unsigned int m_VAO = 0;
         unsigned int m_VBO = 0;
         unsigned int m_EBO = 0;
+
+        bool m_Wireframe = false;
     };
 }

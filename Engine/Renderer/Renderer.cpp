@@ -13,16 +13,16 @@ namespace TC
     {
         float vertices[] =
         {
-            // Position              // Color
-            -0.5f,-0.5f,-0.5f,       1,0,0,
-             0.5f,-0.5f,-0.5f,       0,1,0,
-             0.5f, 0.5f,-0.5f,       0,0,1,
-            -0.5f, 0.5f,-0.5f,       1,1,0,
+            // Position             // Color
+            -0.5f,-0.5f,-0.5f,      1,0,0,
+             0.5f,-0.5f,-0.5f,      0,1,0,
+             0.5f, 0.5f,-0.5f,      0,0,1,
+            -0.5f, 0.5f,-0.5f,      1,1,0,
 
-            -0.5f,-0.5f, 0.5f,       1,0,1,
-             0.5f,-0.5f, 0.5f,       0,1,1,
-             0.5f, 0.5f, 0.5f,       1,1,1,
-            -0.5f, 0.5f, 0.5f,       1,0.5f,0
+            -0.5f,-0.5f, 0.5f,      1,0,1,
+             0.5f,-0.5f, 0.5f,      0,1,1,
+             0.5f, 0.5f, 0.5f,      1,1,1,
+            -0.5f, 0.5f, 0.5f,      1,0.5f,0
         };
 
         unsigned int indices[] =
@@ -59,15 +59,13 @@ namespace TC
             GL_STATIC_DRAW
         );
 
-        // Position attribute
         glVertexAttribPointer(
             0, 3, GL_FLOAT, GL_FALSE,
-            6 * sizeof(float), (void*)0
+            6 * sizeof(float), nullptr
         );
 
         glEnableVertexAttribArray(0);
 
-        // Color attribute
         glVertexAttribPointer(
             1, 3, GL_FLOAT, GL_FALSE,
             6 * sizeof(float),
@@ -78,7 +76,6 @@ namespace TC
 
         glBindVertexArray(0);
 
-        // Enable depth testing
         glEnable(GL_DEPTH_TEST);
 
         if (!m_Shader.LoadFromFiles(
@@ -88,14 +85,18 @@ namespace TC
             return false;
         }
 
-        std::cout << "TC: 3D Renderer initialized!\n";
+        std::cout << "TC: Renderer initialized!\n";
 
         return true;
     }
 
-    void Renderer::Render(float timeSeconds)
+    void Renderer::Render(
+        const Camera& camera,
+        float aspectRatio)
     {
-        glClearColor(0.06f, 0.07f, 0.11f, 1.0f);
+        glClearColor(
+            0.06f, 0.07f, 0.11f, 1.0f
+        );
 
         glClear(
             GL_COLOR_BUFFER_BIT |
@@ -104,33 +105,22 @@ namespace TC
 
         m_Shader.Use();
 
-        // Model transformation
-        glm::mat4 model = glm::mat4(1.0f);
+        glm::mat4 model(1.0f);
 
-        model = glm::rotate(
-            model,
-            timeSeconds,
-            glm::vec3(0.5f, 1.0f, 0.0f)
-        );
+        glm::mat4 view = camera.GetViewMatrix();
 
-        // Camera view
-        glm::mat4 view = glm::lookAt(
-            glm::vec3(2.0f, 2.0f, 3.0f),
-            glm::vec3(0.0f, 0.0f, 0.0f),
-            glm::vec3(0.0f, 1.0f, 0.0f)
-        );
-
-        // Perspective projection
-        glm::mat4 projection = glm::perspective(
-            glm::radians(45.0f),
-            1280.0f / 720.0f,
-            0.1f,
-            100.0f
-        );
+        glm::mat4 projection =
+            camera.GetProjectionMatrix(aspectRatio);
 
         glm::mat4 mvp = projection * view * model;
 
         m_Shader.SetMat4("uMVP", mvp);
+
+        // Wireframe rendering
+        glPolygonMode(
+            GL_FRONT_AND_BACK,
+            m_Wireframe ? GL_LINE : GL_FILL
+        );
 
         glBindVertexArray(m_VAO);
 
@@ -142,6 +132,17 @@ namespace TC
         );
 
         glBindVertexArray(0);
+
+        // Restore default rendering mode
+        glPolygonMode(
+            GL_FRONT_AND_BACK,
+            GL_FILL
+        );
+    }
+
+    void Renderer::SetWireframe(bool enabled)
+    {
+        m_Wireframe = enabled;
     }
 
     void Renderer::Shutdown()
