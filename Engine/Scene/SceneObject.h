@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <string>
 
 namespace TC
 {
@@ -18,18 +19,20 @@ namespace TC
             const glm::vec3& position,
             const glm::vec3& rotation,
             const glm::vec3& scale,
-            const glm::vec3& color
+            const glm::vec3& color,
+            const std::string& name = {}
         );
 
         glm::mat4 GetModelMatrix() const;
 
         PrimitiveType GetType() const;
+        const std::string& GetName() const;
         glm::vec3 GetColor() const;
-
         glm::vec3 GetPosition() const;
         glm::vec3 GetRotation() const;
         glm::vec3 GetScale() const;
 
+        void SetName(const std::string& name);
         void SetPosition(const glm::vec3& position);
         void SetRotation(const glm::vec3& rotation);
         void SetScale(const glm::vec3& scale);
@@ -41,7 +44,7 @@ namespace TC
 
     private:
         PrimitiveType m_Type;
-
+        std::string m_Name;
         glm::vec3 m_Position;
         glm::vec3 m_Rotation;
         glm::vec3 m_Scale;

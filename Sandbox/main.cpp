@@ -5,6 +5,7 @@
 #include <string>
 #include <filesystem>
 #include <cmath>
+#include <algorithm>
 
 #include <glad/glad.h>
 
@@ -73,7 +74,7 @@ namespace
                 return false;
 
             const auto& objects = scene.GetObjects();
-            file << "TC_SCENE 1\n";
+            file << "TC_SCENE 2\n";
             file << objects.size() << '\n';
             file << std::setprecision(9);
 
@@ -85,6 +86,7 @@ namespace
                 const glm::vec3 color = object.GetColor();
 
                 file << static_cast<int>(object.GetType()) << ' '
+                     << std::quoted(object.GetName()) << ' '
                      << position.x << ' ' << position.y << ' ' << position.z << ' '
                      << rotation.x << ' ' << rotation.y << ' ' << rotation.z << ' '
                      << scale.x << ' ' << scale.y << ' ' << scale.z << ' '
@@ -108,7 +110,8 @@ namespace
         std::string magic;
         int version = 0;
         std::size_t objectCount = 0;
-        if (!(file >> magic >> version) || magic != "TC_SCENE" || version != 1 ||
+        if (!(file >> magic >> version) || magic != "TC_SCENE" ||
+            (version != 1 && version != 2) ||
             !(file >> objectCount) || objectCount == 0 || objectCount > 100000)
             return false;
 
@@ -118,9 +121,18 @@ namespace
         for (std::size_t i = 0; i < objectCount; ++i)
         {
             int typeValue = -1;
+            std::string objectName;
             glm::vec3 position, rotation, scale, color;
-            if (!(file >> typeValue
-                >> position.x >> position.y >> position.z
+            if (!(file >> typeValue))
+                return false;
+
+            if (version >= 2)
+            {
+                if (!(file >> std::quoted(objectName)))
+                    return false;
+            }
+
+            if (!(file >> position.x >> position.y >> position.z
                 >> rotation.x >> rotation.y >> rotation.z
                 >> scale.x >> scale.y >> scale.z
                 >> color.x >> color.y >> color.z))
@@ -141,9 +153,16 @@ namespace
             if (scale.x <= 0.0f || scale.y <= 0.0f || scale.z <= 0.0f)
                 return false;
 
+            if (objectName.empty())
+            {
+                const std::string typeName =
+                    typeValue == static_cast<int>(TC::PrimitiveType::Cube) ? "Cube" : "Plane";
+                objectName = typeName + " " + std::to_string(i);
+            }
+
             objects.emplace_back(
                 static_cast<TC::PrimitiveType>(typeValue),
-                position, rotation, scale, color);
+                position, rotation, scale, color, objectName);
         }
 
         // Do not replace the live scene unless the entire file was parsed successfully.
@@ -227,6 +246,7 @@ namespace
             for (std::size_t i = 0; i < a.size(); ++i)
             {
                 if (a[i].GetType() != b[i].GetType() ||
+                    a[i].GetName() != b[i].GetName() ||
                     !VectorEqual(a[i].GetPosition(), b[i].GetPosition()) ||
                     !VectorEqual(a[i].GetRotation(), b[i].GetRotation()) ||
                     !VectorEqual(a[i].GetScale(), b[i].GetScale()) ||
@@ -338,7 +358,7 @@ namespace
         double ypos
     )
     {
-        if (g_FileBrowser.IsOpen())
+        if (g_FileBrowser.IsOpen() || ImGui::GetIO().WantCaptureMouse)
             return;
 
         if (g_RightMouseDown && g_Camera)
@@ -369,7 +389,7 @@ namespace
         double yOffset
     )
     {
-        if (g_FileBrowser.IsOpen())
+        if (g_FileBrowser.IsOpen() || ImGui::GetIO().WantCaptureMouse)
             return;
 
         if (g_Camera)
@@ -387,7 +407,7 @@ namespace
         int mods
     )
     {
-        if (g_FileBrowser.IsOpen())
+        if (g_FileBrowser.IsOpen() || ImGui::GetIO().WantCaptureMouse)
             return;
 
         if (button == GLFW_MOUSE_BUTTON_RIGHT)
@@ -759,11 +779,12 @@ namespace
             glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
             glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS;
 
-        const bool saveAsPressed = !g_FileBrowser.IsOpen() && controlDown && shiftDown &&
+        const bool uiCapturesKeyboard = ImGui::GetIO().WantCaptureKeyboard;
+        const bool saveAsPressed = !g_FileBrowser.IsOpen() && !uiCapturesKeyboard && controlDown && shiftDown &&
             glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS;
-        const bool savePressed = !g_FileBrowser.IsOpen() && controlDown && !shiftDown &&
+        const bool savePressed = !g_FileBrowser.IsOpen() && !uiCapturesKeyboard && controlDown && !shiftDown &&
             glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS;
-        const bool loadPressed = !g_FileBrowser.IsOpen() && controlDown &&
+        const bool loadPressed = !g_FileBrowser.IsOpen() && !uiCapturesKeyboard && controlDown &&
             glfwGetKey(window, GLFW_KEY_O) == GLFW_PRESS;
 
         if (saveAsPressed && !g_SaveAsKeyWasPressed)
@@ -907,6 +928,143 @@ namespace
             }
         }
         g_EscapeKeyWasPressed = escapePressed;
+    }
+
+    void DrawEditorPanels(TC::Scene& scene, int& selectedObject,
+        GLFWwindow* window, TC::TransformGizmo& gizmo)
+    {
+        int framebufferWidth = 0;
+        int framebufferHeight = 0;
+        glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);
+        const float displayHeight = static_cast<float>((std::max)(framebufferHeight, 480));
+
+        // Hierarchy panel.
+        ImGui::SetNextWindowPos(ImVec2(8.0f, 76.0f), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(250.0f, displayHeight - 88.0f), ImGuiCond_Always);
+        ImGui::Begin("Hierarchy", nullptr,
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoCollapse);
+
+        ImGui::Text("Scene Objects (%zu)", scene.GetObjects().size());
+        ImGui::Separator();
+
+        if (ImGui::Button("+ Cube", ImVec2(112.0f, 0.0f)))
+        {
+            glm::vec3 position(0.0f, 0.5f, 2.0f);
+            if (TC::SceneObject* current = scene.GetObject(selectedObject))
+                position = current->GetPosition() + glm::vec3(1.5f, 0.0f, 0.0f);
+            position.y = (std::max)(position.y, 0.5f);
+            selectedObject = scene.CreateObject(TC::PrimitiveType::Cube, position);
+            gizmo.ClearActiveAxis();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("+ Plane", ImVec2(112.0f, 0.0f)))
+        {
+            glm::vec3 position(0.0f, 0.02f, 2.0f);
+            if (TC::SceneObject* current = scene.GetObject(selectedObject))
+                position = current->GetPosition() + glm::vec3(1.5f, 0.0f, 0.0f);
+            position.y = 0.02f;
+            selectedObject = scene.CreateObject(TC::PrimitiveType::Plane, position);
+            gizmo.ClearActiveAxis();
+        }
+
+        ImGui::BeginChild("HierarchyObjectList", ImVec2(0.0f, -38.0f), true);
+        const auto& objects = scene.GetObjects();
+        for (int i = 0; i < static_cast<int>(objects.size()); ++i)
+        {
+            const bool isGround = (i == 0);
+            const std::string label = objects[i].GetName() +
+                (objects[i].GetType() == TC::PrimitiveType::Cube ? "  [Cube]" : "  [Plane]");
+            if (isGround)
+                ImGui::BeginDisabled();
+
+            if (ImGui::Selectable(label.c_str(), selectedObject == i))
+            {
+                if (!isGround)
+                {
+                    selectedObject = i;
+                    gizmo.EndDrag();
+                    gizmo.ClearActiveAxis();
+                }
+            }
+
+            if (isGround)
+                ImGui::EndDisabled();
+        }
+        ImGui::EndChild();
+
+        if (selectedObject >= 1)
+        {
+            if (ImGui::Button("Duplicate", ImVec2(112.0f, 0.0f)))
+            {
+                selectedObject = scene.DuplicateObject(selectedObject);
+                gizmo.ClearActiveAxis();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Delete", ImVec2(112.0f, 0.0f)))
+            {
+                if (scene.RemoveObject(selectedObject))
+                    selectedObject = -1;
+                gizmo.EndDrag();
+                gizmo.ClearActiveAxis();
+            }
+        }
+        ImGui::End();
+
+        // Inspector panel.
+        ImGui::SetNextWindowPos(
+            ImVec2((std::max)(8.0f, static_cast<float>(framebufferWidth) - 308.0f), 76.0f),
+            ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(300.0f, displayHeight - 88.0f), ImGuiCond_Always);
+        ImGui::Begin("Inspector", nullptr,
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoCollapse);
+
+        TC::SceneObject* object = scene.GetObject(selectedObject);
+        if (!object)
+        {
+            ImGui::TextDisabled("No object selected.");
+            ImGui::TextWrapped("Select an object in the Hierarchy or click it in the viewport.");
+        }
+        else
+        {
+            ImGui::Text("Type: %s",
+                object->GetType() == TC::PrimitiveType::Cube ? "Cube" : "Plane");
+            ImGui::Separator();
+
+            char nameBuffer[128] = {};
+            const std::string& currentName = object->GetName();
+            const size_t nameLength = (std::min)(currentName.size(), sizeof(nameBuffer) - 1);
+            currentName.copy(nameBuffer, nameLength);
+            if (ImGui::InputText("Name", nameBuffer, sizeof(nameBuffer)) &&
+                nameBuffer[0] != '\0')
+                object->SetName(nameBuffer);
+
+            glm::vec3 position = object->GetPosition();
+            if (ImGui::DragFloat3("Position", &position.x, 0.05f))
+                object->SetPosition(position);
+
+            glm::vec3 rotation = object->GetRotation();
+            if (ImGui::DragFloat3("Rotation", &rotation.x, 1.0f))
+                object->SetRotation(rotation);
+
+            glm::vec3 scale = object->GetScale();
+            if (ImGui::DragFloat3("Scale", &scale.x, 0.01f, 0.05f, 1000.0f))
+                object->SetScale(scale);
+
+            glm::vec3 color = object->GetColor();
+            if (ImGui::ColorEdit3("Color", &color.x))
+                object->SetColor(color);
+
+            ImGui::Separator();
+            if (ImGui::Button("Reset Transform"))
+            {
+                object->SetPosition(glm::vec3(0.0f, 0.5f, 0.0f));
+                object->SetRotation(glm::vec3(0.0f));
+                object->SetScale(glm::vec3(1.0f));
+            }
+        }
+        ImGui::End();
     }
 }
 
@@ -1053,10 +1211,12 @@ int main()
         ImGui::TextUnformatted("Ctrl+O: Open   Ctrl+S: Save   Ctrl+Shift+S: Save As");
         ImGui::End();
 
+        DrawEditorPanels(scene, g_SelectedObject, nativeWindow, gizmo);
+
         ProcessSceneFileCommands(
             nativeWindow, scene, history, gizmo, g_SelectedObject);
 
-        if (!g_FileBrowser.IsOpen())
+        if (!g_FileBrowser.IsOpen() && !ImGui::GetIO().WantCaptureKeyboard)
         {
             ProcessHistoryInput(
                 nativeWindow, scene, gizmo, history, g_SelectedObject);

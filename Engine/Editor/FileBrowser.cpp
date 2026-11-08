@@ -10,6 +10,31 @@ namespace TC
 {
     namespace
     {
+        std::filesystem::path g_LastBrowserDirectory;
+
+        std::filesystem::path FindDefaultSceneDirectory()
+        {
+            std::error_code ec;
+            auto current = std::filesystem::current_path(ec);
+            if (ec)
+                return {};
+
+            // Walk upward from the process working directory so launching
+            // from build/Release still finds the project's Assets/Scenes.
+            for (auto candidate = current; !candidate.empty(); candidate = candidate.parent_path())
+            {
+                const auto scenes = candidate / "Assets" / "Scenes";
+                if (std::filesystem::is_directory(scenes, ec) && !ec)
+                    return scenes;
+
+                ec.clear();
+                if (candidate == candidate.root_path())
+                    break;
+            }
+
+            return current;
+        }
+
         bool IsDirectory(const std::filesystem::directory_entry& entry)
         {
             std::error_code ec;
@@ -29,16 +54,30 @@ namespace TC
         m_ConfirmOverwrite = false;
 
         std::error_code ec;
-        std::filesystem::path start = startPath;
-        if (start.empty())
-            start = std::filesystem::current_path(ec);
-        if (ec || !std::filesystem::exists(start, ec) ||
-            !std::filesystem::is_directory(start, ec))
-            start = std::filesystem::current_path(ec);
+        std::filesystem::path start;
+
+        if (!g_LastBrowserDirectory.empty() &&
+            std::filesystem::is_directory(g_LastBrowserDirectory, ec) && !ec)
+        {
+            start = g_LastBrowserDirectory;
+        }
+        else
+        {
+            ec.clear();
+            start = startPath;
+            if (start.empty() ||
+                !std::filesystem::is_directory(start, ec) || ec)
+            {
+                ec.clear();
+                start = FindDefaultSceneDirectory();
+            }
+        }
 
         m_CurrentDirectory = std::filesystem::weakly_canonical(start, ec);
         if (ec)
             m_CurrentDirectory = std::filesystem::current_path();
+
+        g_LastBrowserDirectory = m_CurrentDirectory;
 
         if (m_Mode == FileBrowserMode::SaveAs)
             m_FileName = "Untitled.tcscene";
@@ -78,6 +117,7 @@ namespace TC
             m_CurrentDirectory = std::filesystem::weakly_canonical(path, ec);
             if (ec)
                 m_CurrentDirectory = path;
+            g_LastBrowserDirectory = m_CurrentDirectory;
             m_SelectedPath.clear();
             RefreshEntries();
         }
@@ -127,7 +167,7 @@ namespace TC
         if (!m_IsOpen)
             return;
 
-        ImGui::SetNextWindowSize(ImVec2(860.0f, 590.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(900.0f, 620.0f), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSizeConstraints(ImVec2(620.0f, 420.0f),
             ImVec2(1500.0f, 1100.0f));
 
@@ -148,8 +188,45 @@ namespace TC
         ImGui::SameLine();
         if (ImGui::Button("Refresh"))
             RefreshEntries();
+
         ImGui::SameLine();
-        ImGui::TextUnformatted(m_CurrentDirectory.string().c_str());
+        ImGui::TextUnformatted("Path:");
+        ImGui::SameLine();
+
+        // Clickable path breadcrumbs.
+        std::vector<std::filesystem::path> breadcrumbParts;
+        auto breadcrumb = m_CurrentDirectory.root_path();
+        if (!breadcrumb.empty())
+            breadcrumbParts.push_back(breadcrumb);
+
+        auto relativeToRoot = m_CurrentDirectory.relative_path();
+        for (const auto& part : relativeToRoot)
+        {
+            if (part.empty())
+                continue;
+            breadcrumb /= part;
+            breadcrumbParts.push_back(breadcrumb);
+        }
+
+        for (size_t i = 0; i < breadcrumbParts.size(); ++i)
+        {
+            const auto label = breadcrumbParts[i] == breadcrumbParts.front()
+                ? breadcrumbParts[i].string()
+                : breadcrumbParts[i].filename().string();
+
+            if (i > 0)
+            {
+                ImGui::SameLine(0.0f, 3.0f);
+                ImGui::TextUnformatted(">");
+                ImGui::SameLine(0.0f, 3.0f);
+            }
+
+            if (ImGui::SmallButton(label.c_str()))
+                NavigateTo(breadcrumbParts[i]);
+
+            if (i + 1 < breadcrumbParts.size())
+                ImGui::SameLine(0.0f, 3.0f);
+        }
 
         ImGui::Separator();
 
@@ -197,6 +274,15 @@ namespace TC
             m_FileName.copy(fileNameBuffer, fileNameLength);
             if (ImGui::InputText("##SceneFileName", fileNameBuffer, sizeof(fileNameBuffer)))
                 m_FileName = fileNameBuffer;
+        }
+        else
+        {
+            ImGui::TextUnformatted("Selected scene");
+            ImGui::SameLine();
+            const std::string selectedName = m_SelectedPath.empty()
+                ? "No scene selected"
+                : m_SelectedPath.filename().string();
+            ImGui::TextUnformatted(selectedName.c_str());
         }
 
         if (ImGui::Button("New Folder"))
