@@ -12,6 +12,7 @@ namespace
 constexpr float GIZMO_LENGTH = 1.3f;
 constexpr float GRID_SNAP_SIZE = 0.5f;
 constexpr float ROTATION_SNAP_DEGREES = 15.0f;
+constexpr float SCALE_SNAP_SIZE = 0.1f;
 constexpr int RING_SEGMENTS = 96;
 
 bool ProjectToScreen(const glm::vec3& p, const glm::mat4& view,
@@ -96,7 +97,7 @@ bool TransformGizmo::Initialize()
 bool TransformGizmo::GetAxisParameter(const Camera& camera, const glm::vec3& origin,
     GizmoAxis axis, float mouseX, float mouseY, int width, int height, float& parameter) const
 {
-    if (width <= 0 || height <= 0 || axis == GizmoAxis::None) return false;
+    if (width <= 0 || height <= 0 || axis == GizmoAxis::None || axis == GizmoAxis::Uniform) return false;
     glm::vec3 u = AxisDirection(axis), v = ScreenPointToRay(camera, mouseX, mouseY, width, height);
     glm::vec3 w = origin - camera.GetPosition();
     float a = glm::dot(u, u), b = glm::dot(u, v), c = glm::dot(v, v);
@@ -132,10 +133,15 @@ void TransformGizmo::UpdateHover(const Camera& camera, const glm::vec3& position
     const GizmoAxis axes[] = {GizmoAxis::X, GizmoAxis::Y, GizmoAxis::Z};
     float closest = 12.0f;
 
-    if (m_Mode == GizmoMode::Translate)
+    if (m_Mode == GizmoMode::Translate || m_Mode == GizmoMode::Scale)
     {
-        glm::vec2 start, end;
-        if (!ProjectToScreen(position, view, projection, width, height, start)) return;
+        glm::vec2 center;
+        if (!ProjectToScreen(position, view, projection, width, height, center)) return;
+        if (m_Mode == GizmoMode::Scale && glm::length(mouse - center) <= 11.0f)
+        {
+            m_HoveredAxis = GizmoAxis::Uniform;
+            return;
+        }
         for (GizmoAxis axis : axes)
         {
             glm::vec2 a, b;
@@ -150,16 +156,16 @@ void TransformGizmo::UpdateHover(const Camera& camera, const glm::vec3& position
     {
         for (GizmoAxis axis : axes)
         {
-            glm::vec3 previous3;
-            if (axis == GizmoAxis::X) previous3 = position + glm::vec3(0, GIZMO_LENGTH * scale, 0);
-            else previous3 = position + glm::vec3(GIZMO_LENGTH * scale, 0, 0);
+            glm::vec3 previous3 = axis == GizmoAxis::X
+                ? position + glm::vec3(0, GIZMO_LENGTH * scale, 0)
+                : position + glm::vec3(GIZMO_LENGTH * scale, 0, 0);
             glm::vec2 previous;
             if (!ProjectToScreen(previous3, view, projection, width, height, previous)) continue;
             for (int i = 1; i <= RING_SEGMENTS; ++i)
             {
                 float angle = 6.28318530718f * float(i) / float(RING_SEGMENTS);
-                glm::vec3 point;
                 float r = GIZMO_LENGTH * scale;
+                glm::vec3 point;
                 if (axis == GizmoAxis::X) point = position + glm::vec3(0, std::cos(angle) * r, std::sin(angle) * r);
                 else if (axis == GizmoAxis::Y) point = position + glm::vec3(std::cos(angle) * r, 0, std::sin(angle) * r);
                 else point = position + glm::vec3(std::cos(angle) * r, std::sin(angle) * r, 0);
@@ -180,22 +186,27 @@ bool TransformGizmo::BeginDrag(const Camera& camera, const glm::vec3& position,
 {
     if (m_HoveredAxis == GizmoAxis::None) return false;
     m_DragOrigin = position;
-    if (m_Mode == GizmoMode::Translate)
+    if (m_Mode == GizmoMode::Translate || (m_Mode == GizmoMode::Scale && m_HoveredAxis != GizmoAxis::Uniform))
     {
         float parameter = 0.0f;
         if (!GetAxisParameter(camera, position, m_HoveredAxis, mouseX, mouseY, width, height, parameter)) return false;
         m_LastDragParameter = parameter;
         m_LastAppliedMovement = 0.0f;
+        m_LastAppliedScale = 0.0f;
     }
-    else
+    else if (m_Mode == GizmoMode::Rotate)
     {
         if (!GetRotationVector(camera, position, m_HoveredAxis, mouseX, mouseY, width, height, m_InitialRotationVector)) return false;
         m_LastAppliedRotation = 0.0f;
     }
+    else
+    {
+        m_InitialMouseY = mouseY;
+        m_LastAppliedScale = 0.0f;
+    }
     m_ActiveAxis = m_HoveredAxis;
     m_IsDragging = true;
-    std::cout << "TC: Started " << (m_Mode == GizmoMode::Rotate ? "rotation" : "translation") << " drag on "
-              << (m_ActiveAxis == GizmoAxis::X ? "X" : m_ActiveAxis == GizmoAxis::Y ? "Y" : "Z") << " axis\n";
+    std::cout << "TC: Started " << (m_Mode == GizmoMode::Translate ? "translation" : m_Mode == GizmoMode::Rotate ? "rotation" : "scaling") << " drag\n";
     return true;
 }
 
@@ -228,6 +239,28 @@ float TransformGizmo::UpdateRotationDrag(const Camera& camera, float mouseX, flo
     return delta;
 }
 
+float TransformGizmo::UpdateScaleDrag(const Camera& camera, float mouseX, float mouseY,
+    int width, int height, bool snapping)
+{
+    if (!m_IsDragging || m_Mode != GizmoMode::Scale || width <= 0 || height <= 0) return 0.0f;
+    float total = 0.0f;
+    if (m_ActiveAxis == GizmoAxis::Uniform)
+    {
+        // Dragging the centre handle vertically scales all three dimensions uniformly.
+        total = (m_InitialMouseY - mouseY) * 0.01f;
+    }
+    else
+    {
+        float current = 0.0f;
+        if (!GetAxisParameter(camera, m_DragOrigin, m_ActiveAxis, mouseX, mouseY, width, height, current)) return 0.0f;
+        total = (current - m_LastDragParameter) / GIZMO_LENGTH;
+    }
+    if (snapping) total = std::round(total / SCALE_SNAP_SIZE) * SCALE_SNAP_SIZE;
+    float delta = total - m_LastAppliedScale;
+    m_LastAppliedScale = total;
+    return delta;
+}
+
 void TransformGizmo::EndDrag() { if (m_IsDragging) std::cout << "TC: Finished gizmo drag\n"; m_IsDragging = false; }
 bool TransformGizmo::IsDragging() const { return m_IsDragging; }
 GizmoAxis TransformGizmo::GetHoveredAxis() const { return m_HoveredAxis; }
@@ -257,6 +290,7 @@ void TransformGizmo::Render(const Camera& camera, const glm::vec3& position, flo
     };
     const GizmoAxis axes[] = {GizmoAxis::X, GizmoAxis::Y, GizmoAxis::Z};
     const glm::vec3 colors[] = {{1.0f, 0.1f, 0.1f}, {0.1f, 1.0f, 0.1f}, {0.1f, 0.3f, 1.0f}};
+
     if (m_Mode == GizmoMode::Translate)
     {
         const float vertices[] = {
@@ -273,7 +307,7 @@ void TransformGizmo::Render(const Camera& camera, const glm::vec3& position, flo
             glDrawArrays(GL_TRIANGLES, i * 5 + 2, 3);
         }
     }
-    else
+    else if (m_Mode == GizmoMode::Rotate)
     {
         std::vector<float> vertices;
         vertices.reserve(3 * (RING_SEGMENTS + 1) * 3);
@@ -300,6 +334,29 @@ void TransformGizmo::Render(const Camera& camera, const glm::vec3& position, flo
             glDrawArrays(GL_LINE_STRIP, i * ringCount, ringCount);
         }
     }
+    else
+    {
+        // Scale handles: axis shafts with square endpoint handles, plus a centre uniform handle.
+        const float vertices[] = {
+            0,0,0, 1.3f,0,0,  1.3f,0,0, 1.3f,0.12f,0, 1.3f,0,0, 1.3f,0,0.12f,
+            0,0,0, 0,1.3f,0,  0,1.3f,0, 0.12f,1.3f,0, 0,1.3f,0, 0,1.3f,0.12f,
+            0,0,0, 0,0,1.3f,  0,0,1.3f, 0.12f,0,1.3f, 0,0,1.3f, 0,0.12f,1.3f
+        };
+        glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
+        for (int i = 0; i < 3; ++i)
+        {
+            m_Shader.SetVec3("u_Color", colorFor(axes[i], colors[i]));
+            glDrawArrays(GL_LINES, i * 6, 6);
+        }
+        const float center[] = {0,0,0};
+        glBufferData(GL_ARRAY_BUFFER, sizeof(center), center, GL_DYNAMIC_DRAW);
+        m_Shader.SetVec3("u_Color", colorFor(GizmoAxis::Uniform, glm::vec3(1.0f)));
+        glPointSize(13.0f);
+        glDrawArrays(GL_POINTS, 0, 1);
+        glPointSize(1.0f);
+    }
+
     glLineWidth(1.0f);
     glBindVertexArray(0);
     glEnable(GL_DEPTH_TEST);

@@ -20,24 +20,16 @@ namespace TC
         Camera();
 
         glm::mat4 GetViewMatrix() const;
-
         glm::mat4 GetProjectionMatrix(float aspectRatio) const;
 
-        void ProcessKeyboard(
-            CameraMovement direction,
-            float deltaTime
-        );
-
-        void ProcessMouseMovement(
-            float xOffset,
-            float yOffset
-        );
-
+        void ProcessKeyboard(CameraMovement direction, float deltaTime);
+        void ProcessMouseMovement(float xOffset, float yOffset);
         void ProcessMouseScroll(float yOffset);
 
         void Reset();
 
         glm::vec3 GetPosition() const;
+        float GetZoom() const;
 
     private:
         void UpdateCameraVectors();

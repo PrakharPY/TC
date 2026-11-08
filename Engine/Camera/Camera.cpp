@@ -13,17 +13,13 @@ namespace TC
 
     void Camera::Reset()
     {
-        // Initial camera position
         m_Position = glm::vec3(2.0f, 2.0f, 3.0f);
 
-        // World up direction
         m_WorldUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
-        // Initial camera orientation
         m_Yaw = -123.7f;
         m_Pitch = -29.0f;
 
-        // Initial field of view
         m_Zoom = 45.0f;
 
         UpdateCameraVectors();
@@ -38,8 +34,7 @@ namespace TC
         );
     }
 
-    glm::mat4 Camera::GetProjectionMatrix(
-        float aspectRatio) const
+    glm::mat4 Camera::GetProjectionMatrix(float aspectRatio) const
     {
         return glm::perspective(
             glm::radians(m_Zoom),
@@ -51,7 +46,8 @@ namespace TC
 
     void Camera::ProcessKeyboard(
         CameraMovement direction,
-        float deltaTime)
+        float deltaTime
+    )
     {
         float velocity = m_MovementSpeed * deltaTime;
 
@@ -85,12 +81,12 @@ namespace TC
 
     void Camera::ProcessMouseMovement(
         float xOffset,
-        float yOffset)
+        float yOffset
+    )
     {
         m_Yaw += xOffset * m_MouseSensitivity;
         m_Pitch += yOffset * m_MouseSensitivity;
 
-        // Prevent camera flipping
         if (m_Pitch > 89.0f)
             m_Pitch = 89.0f;
 
@@ -116,6 +112,11 @@ namespace TC
         return m_Position;
     }
 
+    float Camera::GetZoom() const
+    {
+        return m_Zoom;
+    }
+
     void Camera::UpdateCameraVectors()
     {
         glm::vec3 front;
@@ -124,8 +125,7 @@ namespace TC
             cos(glm::radians(m_Yaw)) *
             cos(glm::radians(m_Pitch));
 
-        front.y =
-            sin(glm::radians(m_Pitch));
+        front.y = sin(glm::radians(m_Pitch));
 
         front.z =
             sin(glm::radians(m_Yaw)) *

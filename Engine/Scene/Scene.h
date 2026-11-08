@@ -14,8 +14,13 @@ namespace TC
 
         void AddObject(const SceneObject& object);
 
-        const std::vector<SceneObject>& GetObjects() const;
+        // Returns the index of the newly created object, or -1 on failure.
+        int CreateObject(PrimitiveType type, const glm::vec3& position);
+        int DuplicateObject(int index);
+        bool RemoveObject(int index);
+        void SetObjects(const std::vector<SceneObject>& objects);
 
+        const std::vector<SceneObject>& GetObjects() const;
         SceneObject* GetObject(int index);
 
         int PickObject(

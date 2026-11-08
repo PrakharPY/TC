@@ -7,8 +7,8 @@
 
 namespace TC
 {
-    enum class GizmoAxis { None, X, Y, Z };
-    enum class GizmoMode { Translate, Rotate };
+    enum class GizmoAxis { None, X, Y, Z, Uniform };
+    enum class GizmoMode { Translate, Rotate, Scale };
 
     class TransformGizmo
     {
@@ -22,6 +22,8 @@ namespace TC
         glm::vec3 UpdateDrag(const Camera& camera, float mouseX, float mouseY,
             int viewportWidth, int viewportHeight, bool snapping = false);
         float UpdateRotationDrag(const Camera& camera, float mouseX, float mouseY,
+            int viewportWidth, int viewportHeight, bool snapping = false);
+        float UpdateScaleDrag(const Camera& camera, float mouseX, float mouseY,
             int viewportWidth, int viewportHeight, bool snapping = false);
         void EndDrag();
         bool IsDragging() const;
@@ -54,5 +56,7 @@ namespace TC
         float m_LastDragParameter = 0.0f;
         float m_LastAppliedMovement = 0.0f;
         float m_LastAppliedRotation = 0.0f;
+        float m_InitialMouseY = 0.0f;
+        float m_LastAppliedScale = 0.0f;
     };
 }

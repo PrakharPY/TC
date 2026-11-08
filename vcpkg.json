@@ -5,9 +5,18 @@
     "glfw3",
     "glm",
     {
-        "name": "glad",
-        "features": ["gl-api-33"]
+      "name": "glad",
+      "features": [
+        "gl-api-33"
+      ]
+    },
+    {
+      "name": "imgui",
+      "features": [
+        "glfw-binding",
+        "opengl3-binding"
+      ]
     }
-   ],
+  ],
   "builtin-baseline": "6fdd23fa0a9479a9f9a1c48178696f60cf39255d"
 }
