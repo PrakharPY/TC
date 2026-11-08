@@ -59,6 +59,57 @@ namespace TC
 
             return glm::length(point - closest);
         }
+
+        glm::vec3 GetAxisDirection(GizmoAxis axis)
+        {
+            switch (axis)
+            {
+            case GizmoAxis::X:
+                return glm::vec3(1.0f, 0.0f, 0.0f);
+
+            case GizmoAxis::Y:
+                return glm::vec3(0.0f, 1.0f, 0.0f);
+
+            case GizmoAxis::Z:
+                return glm::vec3(0.0f, 0.0f, 1.0f);
+
+            default:
+                return glm::vec3(0.0f);
+            }
+        }
+
+        glm::vec3 ScreenPointToRay(
+            const Camera& camera,
+            float mouseX,
+            float mouseY,
+            int width,
+            int height
+        )
+        {
+            float x = (2.0f * mouseX) / width - 1.0f;
+            float y = 1.0f - (2.0f * mouseY) / height;
+
+            glm::vec4 rayClip(x, y, -1.0f, 1.0f);
+
+            glm::mat4 projection =
+                camera.GetProjectionMatrix(
+                    static_cast<float>(width) /
+                    static_cast<float>(height)
+                );
+
+            glm::vec4 rayEye =
+                glm::inverse(projection) * rayClip;
+
+            rayEye.z = -1.0f;
+            rayEye.w = 0.0f;
+
+            glm::vec3 rayWorld =
+                glm::vec3(
+                    glm::inverse(camera.GetViewMatrix()) * rayEye
+                );
+
+            return glm::normalize(rayWorld);
+        }
     }
 
     bool TransformGizmo::Initialize()
@@ -105,7 +156,6 @@ namespace TC
         glGenBuffers(1, &m_VBO);
 
         glBindVertexArray(m_VAO);
-
         glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
 
         glBufferData(
@@ -128,7 +178,61 @@ namespace TC
 
         glBindVertexArray(0);
 
-        std::cout << "TC: Interactive gizmo initialized!\n";
+        std::cout << "TC: Interactive transform gizmo initialized!\n";
+
+        return true;
+    }
+
+    bool TransformGizmo::GetAxisParameter(
+        const Camera& camera,
+        const glm::vec3& origin,
+        GizmoAxis axis,
+        float mouseX,
+        float mouseY,
+        int viewportWidth,
+        int viewportHeight,
+        float& parameter
+    ) const
+    {
+        if (viewportWidth <= 0 || viewportHeight <= 0 ||
+            axis == GizmoAxis::None)
+        {
+            return false;
+        }
+
+        glm::vec3 axisDirection = GetAxisDirection(axis);
+
+        glm::vec3 rayOrigin = camera.GetPosition();
+
+        glm::vec3 rayDirection = ScreenPointToRay(
+            camera,
+            mouseX,
+            mouseY,
+            viewportWidth,
+            viewportHeight
+        );
+
+        // Calculate the closest points between:
+        // 1. The selected world-space axis.
+        // 2. The mouse ray.
+
+        glm::vec3 w = origin - rayOrigin;
+
+        float a = glm::dot(axisDirection, axisDirection);
+        float b = glm::dot(axisDirection, rayDirection);
+        float c = glm::dot(rayDirection, rayDirection);
+
+        float d = glm::dot(axisDirection, w);
+        float e = glm::dot(rayDirection, w);
+
+        float denominator = a * c - b * b;
+
+        // Avoid unstable calculations when the ray is
+        // almost parallel to the selected axis.
+        if (std::abs(denominator) < 0.0001f)
+            return false;
+
+        parameter = (b * e - c * d) / denominator;
 
         return true;
     }
@@ -142,6 +246,9 @@ namespace TC
         int viewportHeight
     )
     {
+        if (m_IsDragging)
+            return;
+
         m_HoveredAxis = GizmoAxis::None;
 
         if (viewportWidth <= 0 || viewportHeight <= 0)
@@ -215,6 +322,91 @@ namespace TC
         }
     }
 
+    bool TransformGizmo::BeginDrag(
+        const Camera& camera,
+        const glm::vec3& position,
+        float mouseX,
+        float mouseY,
+        int viewportWidth,
+        int viewportHeight
+    )
+    {
+        if (m_HoveredAxis == GizmoAxis::None)
+            return false;
+
+        float parameter = 0.0f;
+
+        if (!GetAxisParameter(
+            camera,
+            position,
+            m_HoveredAxis,
+            mouseX,
+            mouseY,
+            viewportWidth,
+            viewportHeight,
+            parameter))
+        {
+            return false;
+        }
+
+        m_DragOrigin = position;
+        m_LastDragParameter = parameter;
+
+        m_ActiveAxis = m_HoveredAxis;
+        m_IsDragging = true;
+
+        std::cout << "TC: Started dragging axis\n";
+
+        return true;
+    }
+
+    glm::vec3 TransformGizmo::UpdateDrag(
+        const Camera& camera,
+        float mouseX,
+        float mouseY,
+        int viewportWidth,
+        int viewportHeight
+    )
+    {
+        if (!m_IsDragging)
+            return glm::vec3(0.0f);
+
+        float currentParameter = 0.0f;
+
+        if (!GetAxisParameter(
+            camera,
+            m_DragOrigin,
+            m_ActiveAxis,
+            mouseX,
+            mouseY,
+            viewportWidth,
+            viewportHeight,
+            currentParameter))
+        {
+            return glm::vec3(0.0f);
+        }
+
+        float movement =
+            currentParameter - m_LastDragParameter;
+
+        m_LastDragParameter = currentParameter;
+
+        return GetAxisDirection(m_ActiveAxis) * movement;
+    }
+
+    void TransformGizmo::EndDrag()
+    {
+        if (m_IsDragging)
+            std::cout << "TC: Finished dragging axis\n";
+
+        m_IsDragging = false;
+    }
+
+    bool TransformGizmo::IsDragging() const
+    {
+        return m_IsDragging;
+    }
+
     void TransformGizmo::Render(
         const Camera& camera,
         const glm::vec3& position,
@@ -224,7 +416,6 @@ namespace TC
         m_Shader.Use();
 
         glm::mat4 model(1.0f);
-
         model = glm::translate(model, position);
 
         m_Shader.SetMat4("u_Model", model);
@@ -314,5 +505,7 @@ namespace TC
 
         m_VAO = 0;
         m_VBO = 0;
+
+        m_IsDragging = false;
     }
 }

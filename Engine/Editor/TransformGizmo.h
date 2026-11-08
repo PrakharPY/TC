@@ -35,6 +35,27 @@ namespace TC
             int viewportHeight
         );
 
+        bool BeginDrag(
+            const Camera& camera,
+            const glm::vec3& position,
+            float mouseX,
+            float mouseY,
+            int viewportWidth,
+            int viewportHeight
+        );
+
+        glm::vec3 UpdateDrag(
+            const Camera& camera,
+            float mouseX,
+            float mouseY,
+            int viewportWidth,
+            int viewportHeight
+        );
+
+        void EndDrag();
+
+        bool IsDragging() const;
+
         GizmoAxis GetHoveredAxis() const;
         GizmoAxis GetActiveAxis() const;
 
@@ -44,6 +65,17 @@ namespace TC
         void Shutdown();
 
     private:
+        bool GetAxisParameter(
+            const Camera& camera,
+            const glm::vec3& origin,
+            GizmoAxis axis,
+            float mouseX,
+            float mouseY,
+            int viewportWidth,
+            int viewportHeight,
+            float& parameter
+        ) const;
+
         Shader m_Shader;
 
         unsigned int m_VAO = 0;
@@ -51,5 +83,11 @@ namespace TC
 
         GizmoAxis m_HoveredAxis = GizmoAxis::None;
         GizmoAxis m_ActiveAxis = GizmoAxis::None;
+
+        bool m_IsDragging = false;
+
+        glm::vec3 m_DragOrigin = glm::vec3(0.0f);
+
+        float m_LastDragParameter = 0.0f;
     };
 }

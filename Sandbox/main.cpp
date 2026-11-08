@@ -68,7 +68,9 @@ namespace
     void UpdateGizmoHover(GLFWwindow* window)
     {
         if (!g_Camera || !g_Scene || !g_Gizmo ||
-            g_SelectedObject < 0 || g_RightMouseDown)
+            g_SelectedObject < 0 ||
+            g_RightMouseDown ||
+            g_Gizmo->IsDragging())
         {
             return;
         }
@@ -149,6 +151,7 @@ namespace
         int mods
     )
     {
+        // Right mouse: camera navigation.
         if (button == GLFW_MOUSE_BUTTON_RIGHT)
         {
             if (action == GLFW_PRESS)
@@ -163,25 +166,61 @@ namespace
             }
         }
 
+        // Left mouse release: finish gizmo dragging.
         if (button == GLFW_MOUSE_BUTTON_LEFT &&
-            action == GLFW_PRESS &&
-            !g_RightMouseDown &&
-            g_Camera &&
-            g_Scene)
+            action == GLFW_RELEASE)
         {
-            // Check whether the cursor is over a gizmo axis.
-            if (g_SelectedObject >= 0 && g_Gizmo)
+            if (g_Gizmo && g_Gizmo->IsDragging())
             {
-                TC::GizmoAxis hovered =
-                    g_Gizmo->GetHoveredAxis();
+                g_Gizmo->EndDrag();
+                UpdateGizmoHover(window);
+            }
 
-                if (hovered != TC::GizmoAxis::None)
+            return;
+        }
+
+        if (button != GLFW_MOUSE_BUTTON_LEFT ||
+            action != GLFW_PRESS ||
+            g_RightMouseDown ||
+            !g_Camera ||
+            !g_Scene)
+        {
+            return;
+        }
+
+        double mouseX, mouseY;
+
+        glfwGetCursorPos(window, &mouseX, &mouseY);
+
+        int width, height;
+
+        glfwGetWindowSize(window, &width, &height);
+
+        if (width <= 0 || height <= 0)
+            return;
+
+        // First check whether we clicked a gizmo axis.
+        if (g_SelectedObject >= 0 && g_Gizmo)
+        {
+            TC::SceneObject* selected =
+                g_Scene->GetObject(g_SelectedObject);
+
+            if (selected)
+            {
+                if (g_Gizmo->BeginDrag(
+                    *g_Camera,
+                    selected->GetPosition(),
+                    static_cast<float>(mouseX),
+                    static_cast<float>(mouseY),
+                    width,
+                    height))
                 {
-                    g_Gizmo->SetActiveAxis(hovered);
+                    TC::GizmoAxis axis =
+                        g_Gizmo->GetActiveAxis();
 
-                    std::cout << "TC: Activated gizmo axis: ";
+                    std::cout << "TC: Dragging axis: ";
 
-                    switch (hovered)
+                    switch (axis)
                     {
                     case TC::GizmoAxis::X:
                         std::cout << "X\n";
@@ -202,48 +241,37 @@ namespace
                     return;
                 }
             }
+        }
 
-            // Otherwise perform normal scene selection.
-            double mouseX, mouseY;
+        // Otherwise, perform normal object selection.
+        glm::vec3 rayDirection = ScreenPointToRay(
+            static_cast<float>(mouseX),
+            static_cast<float>(mouseY),
+            width,
+            height,
+            *g_Camera
+        );
 
-            glfwGetCursorPos(window, &mouseX, &mouseY);
-
-            int width, height;
-
-            glfwGetWindowSize(window, &width, &height);
-
-            if (width <= 0 || height <= 0)
-                return;
-
-            glm::vec3 rayDirection = ScreenPointToRay(
-                static_cast<float>(mouseX),
-                static_cast<float>(mouseY),
-                width,
-                height,
-                *g_Camera
+        g_SelectedObject =
+            g_Scene->PickObject(
+                g_Camera->GetPosition(),
+                rayDirection
             );
 
-            g_SelectedObject =
-                g_Scene->PickObject(
-                    g_Camera->GetPosition(),
-                    rayDirection
-                );
+        if (g_Gizmo)
+            g_Gizmo->ClearActiveAxis();
 
-            if (g_Gizmo)
-                g_Gizmo->ClearActiveAxis();
-
-            if (g_SelectedObject >= 0)
-            {
-                std::cout << "TC: Selected object "
-                          << g_SelectedObject << '\n';
-            }
-            else
-            {
-                std::cout << "TC: Selection cleared\n";
-            }
-
-            UpdateGizmoHover(window);
+        if (g_SelectedObject >= 0)
+        {
+            std::cout << "TC: Selected object "
+                      << g_SelectedObject << '\n';
         }
+        else
+        {
+            std::cout << "TC: Selection cleared\n";
+        }
+
+        UpdateGizmoHover(window);
     }
 
     void ProcessCameraInput(
@@ -322,6 +350,47 @@ namespace
         if (glfwGetKey(window, GLFW_KEY_EQUAL) == GLFW_PRESS)
             object->ScaleBy(1.0f + scaleSpeed);
     }
+
+    void ProcessGizmoDragging(
+        GLFWwindow* window,
+        TC::Scene& scene,
+        TC::TransformGizmo& gizmo,
+        int selectedObject
+    )
+    {
+        if (!gizmo.IsDragging())
+            return;
+
+        TC::SceneObject* object =
+            scene.GetObject(selectedObject);
+
+        if (!object)
+        {
+            gizmo.EndDrag();
+            return;
+        }
+
+        double mouseX, mouseY;
+
+        glfwGetCursorPos(window, &mouseX, &mouseY);
+
+        int width, height;
+
+        glfwGetWindowSize(window, &width, &height);
+
+        if (width <= 0 || height <= 0)
+            return;
+
+        glm::vec3 movement = gizmo.UpdateDrag(
+            *g_Camera,
+            static_cast<float>(mouseX),
+            static_cast<float>(mouseY),
+            width,
+            height
+        );
+
+        object->Translate(movement);
+    }
 }
 
 int main()
@@ -362,10 +431,11 @@ int main()
     glfwSetScrollCallback(nativeWindow, ScrollCallback);
     glfwSetMouseButtonCallback(nativeWindow, MouseButtonCallback);
 
-    std::cout << "\nTC Milestone 0.9.2 - Mouse Axis Detection\n";
-    std::cout << "Left Click: Select object / Activate axis\n";
+    std::cout << "\nTC Milestone 0.9.3 - Interactive Gizmo Dragging\n\n";
+
+    std::cout << "Left Click: Select object / Grab gizmo axis\n";
+    std::cout << "Left Mouse Drag: Move along selected axis\n";
     std::cout << "Right Mouse: Hold to look around\n";
-    std::cout << "Hover over gizmo axes to highlight them\n";
     std::cout << "WASD: Move camera | Scroll: Zoom\n";
     std::cout << "Arrow Keys: Move object X/Z\n";
     std::cout << "Page Up/Down: Move object Y\n";
@@ -386,12 +456,24 @@ int main()
 
         ProcessCameraInput(nativeWindow, camera, deltaTime);
 
-        ProcessObjectTransform(
-            nativeWindow,
-            scene,
-            g_SelectedObject,
-            deltaTime
-        );
+        if (gizmo.IsDragging())
+        {
+            ProcessGizmoDragging(
+                nativeWindow,
+                scene,
+                gizmo,
+                g_SelectedObject
+            );
+        }
+        else
+        {
+            ProcessObjectTransform(
+                nativeWindow,
+                scene,
+                g_SelectedObject,
+                deltaTime
+            );
+        }
 
         bool wireframePressed =
             glfwGetKey(nativeWindow, GLFW_KEY_F) == GLFW_PRESS;
@@ -400,6 +482,10 @@ int main()
         {
             g_Wireframe = !g_Wireframe;
             renderer.SetWireframe(g_Wireframe);
+
+            std::cout << "TC: Wireframe "
+                      << (g_Wireframe ? "ON" : "OFF")
+                      << '\n';
         }
 
         g_WireframeKeyWasPressed = wireframePressed;
@@ -430,8 +516,11 @@ int main()
             TC::SceneObject* selected =
                 scene.GetObject(g_SelectedObject);
 
-            if (selected && !g_RightMouseDown)
+            if (selected && !g_RightMouseDown &&
+                !gizmo.IsDragging())
+            {
                 UpdateGizmoHover(nativeWindow);
+            }
 
             renderer.Render(
                 camera,
@@ -455,6 +544,7 @@ int main()
         glfwPollEvents();
     }
 
+    gizmo.EndDrag();
     gizmo.Shutdown();
     renderer.Shutdown();
 
