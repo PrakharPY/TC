@@ -12,11 +12,13 @@
 #include "Camera/Camera.h"
 #include "Scene/Scene.h"
 #include "Renderer/Renderer.h"
+#include "Editor/TransformGizmo.h"
 
 namespace
 {
     TC::Camera* g_Camera = nullptr;
     TC::Scene* g_Scene = nullptr;
+    TC::TransformGizmo* g_Gizmo = nullptr;
 
     int g_SelectedObject = -1;
 
@@ -63,29 +65,67 @@ namespace
         return glm::normalize(rayWorld);
     }
 
+    void UpdateGizmoHover(GLFWwindow* window)
+    {
+        if (!g_Camera || !g_Scene || !g_Gizmo ||
+            g_SelectedObject < 0 || g_RightMouseDown)
+        {
+            return;
+        }
+
+        TC::SceneObject* selected =
+            g_Scene->GetObject(g_SelectedObject);
+
+        if (!selected)
+            return;
+
+        double mouseX, mouseY;
+
+        glfwGetCursorPos(window, &mouseX, &mouseY);
+
+        int width, height;
+
+        glfwGetWindowSize(window, &width, &height);
+
+        if (width <= 0 || height <= 0)
+            return;
+
+        g_Gizmo->UpdateHover(
+            *g_Camera,
+            selected->GetPosition(),
+            static_cast<float>(mouseX),
+            static_cast<float>(mouseY),
+            width,
+            height
+        );
+    }
+
     void MouseCallback(
         GLFWwindow* window,
         double xpos,
         double ypos
     )
     {
-        if (!g_Camera || !g_RightMouseDown)
-            return;
-
-        if (g_FirstMouse)
+        if (g_RightMouseDown && g_Camera)
         {
+            if (g_FirstMouse)
+            {
+                g_LastX = static_cast<float>(xpos);
+                g_LastY = static_cast<float>(ypos);
+                g_FirstMouse = false;
+            }
+
+            float xOffset = static_cast<float>(xpos) - g_LastX;
+            float yOffset = g_LastY - static_cast<float>(ypos);
+
             g_LastX = static_cast<float>(xpos);
             g_LastY = static_cast<float>(ypos);
-            g_FirstMouse = false;
+
+            g_Camera->ProcessMouseMovement(xOffset, yOffset);
+            return;
         }
 
-        float xOffset = static_cast<float>(xpos) - g_LastX;
-        float yOffset = g_LastY - static_cast<float>(ypos);
-
-        g_LastX = static_cast<float>(xpos);
-        g_LastY = static_cast<float>(ypos);
-
-        g_Camera->ProcessMouseMovement(xOffset, yOffset);
+        UpdateGizmoHover(window);
     }
 
     void ScrollCallback(
@@ -115,22 +155,11 @@ namespace
             {
                 g_RightMouseDown = true;
                 g_FirstMouse = true;
-
-                glfwSetInputMode(
-                    window,
-                    GLFW_CURSOR,
-                    GLFW_CURSOR_DISABLED
-                );
             }
             else if (action == GLFW_RELEASE)
             {
                 g_RightMouseDown = false;
-
-                glfwSetInputMode(
-                    window,
-                    GLFW_CURSOR,
-                    GLFW_CURSOR_NORMAL
-                );
+                UpdateGizmoHover(window);
             }
         }
 
@@ -140,6 +169,41 @@ namespace
             g_Camera &&
             g_Scene)
         {
+            // Check whether the cursor is over a gizmo axis.
+            if (g_SelectedObject >= 0 && g_Gizmo)
+            {
+                TC::GizmoAxis hovered =
+                    g_Gizmo->GetHoveredAxis();
+
+                if (hovered != TC::GizmoAxis::None)
+                {
+                    g_Gizmo->SetActiveAxis(hovered);
+
+                    std::cout << "TC: Activated gizmo axis: ";
+
+                    switch (hovered)
+                    {
+                    case TC::GizmoAxis::X:
+                        std::cout << "X\n";
+                        break;
+
+                    case TC::GizmoAxis::Y:
+                        std::cout << "Y\n";
+                        break;
+
+                    case TC::GizmoAxis::Z:
+                        std::cout << "Z\n";
+                        break;
+
+                    default:
+                        break;
+                    }
+
+                    return;
+                }
+            }
+
+            // Otherwise perform normal scene selection.
             double mouseX, mouseY;
 
             glfwGetCursorPos(window, &mouseX, &mouseY);
@@ -165,6 +229,9 @@ namespace
                     rayDirection
                 );
 
+            if (g_Gizmo)
+                g_Gizmo->ClearActiveAxis();
+
             if (g_SelectedObject >= 0)
             {
                 std::cout << "TC: Selected object "
@@ -174,6 +241,8 @@ namespace
             {
                 std::cout << "TC: Selection cleared\n";
             }
+
+            UpdateGizmoHover(window);
         }
     }
 
@@ -217,7 +286,6 @@ namespace
         if (!object)
             return;
 
-        // Translation speed.
         float moveSpeed = 2.0f * deltaTime;
 
         if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
@@ -238,7 +306,6 @@ namespace
         if (glfwGetKey(window, GLFW_KEY_PAGE_DOWN) == GLFW_PRESS)
             object->Translate(glm::vec3(0.0f, -moveSpeed, 0.0f));
 
-        // Rotation speed.
         float rotationSpeed = 90.0f * deltaTime;
 
         if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
@@ -247,7 +314,6 @@ namespace
         if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
             object->Rotate(glm::vec3(0.0f, rotationSpeed, 0.0f));
 
-        // Scaling.
         float scaleSpeed = 1.0f * deltaTime;
 
         if (glfwGetKey(window, GLFW_KEY_MINUS) == GLFW_PRESS)
@@ -269,14 +335,20 @@ int main()
 
     TC::Camera camera;
     TC::Scene scene;
+
     TC::Renderer renderer;
+    TC::TransformGizmo gizmo;
 
     g_Camera = &camera;
     g_Scene = &scene;
+    g_Gizmo = &gizmo;
 
     if (!renderer.Initialize())
+        return -1;
+
+    if (!gizmo.Initialize())
     {
-        std::cerr << "Renderer initialization failed!\n";
+        renderer.Shutdown();
         return -1;
     }
 
@@ -290,26 +362,14 @@ int main()
     glfwSetScrollCallback(nativeWindow, ScrollCallback);
     glfwSetMouseButtonCallback(nativeWindow, MouseButtonCallback);
 
-    std::cout << "\nTC Milestone 0.8 - Object Transformation\n\n";
-
-    std::cout << "SELECTION:\n";
-    std::cout << "Left Click: Select object\n";
-    std::cout << "Right Mouse: Hold to look around\n\n";
-
-    std::cout << "TRANSLATION:\n";
-    std::cout << "Arrow Keys: Move X/Z\n";
-    std::cout << "Page Up/Down: Move Y\n\n";
-
-    std::cout << "ROTATION:\n";
-    std::cout << "Q/E: Rotate around Y\n\n";
-
-    std::cout << "SCALING:\n";
-    std::cout << "-/+: Scale down/up\n\n";
-
-    std::cout << "CAMERA:\n";
-    std::cout << "WASD: Move camera\n";
-    std::cout << "Space/Ctrl: Up/Down\n";
-    std::cout << "Scroll: Zoom\n";
+    std::cout << "\nTC Milestone 0.9.2 - Mouse Axis Detection\n";
+    std::cout << "Left Click: Select object / Activate axis\n";
+    std::cout << "Right Mouse: Hold to look around\n";
+    std::cout << "Hover over gizmo axes to highlight them\n";
+    std::cout << "WASD: Move camera | Scroll: Zoom\n";
+    std::cout << "Arrow Keys: Move object X/Z\n";
+    std::cout << "Page Up/Down: Move object Y\n";
+    std::cout << "Q/E: Rotate | -/+: Scale\n";
     std::cout << "F: Wireframe | R: Reset camera\n\n";
 
     float lastFrame = 0.0f;
@@ -333,7 +393,6 @@ int main()
             deltaTime
         );
 
-        // Wireframe toggle.
         bool wireframePressed =
             glfwGetKey(nativeWindow, GLFW_KEY_F) == GLFW_PRESS;
 
@@ -341,15 +400,10 @@ int main()
         {
             g_Wireframe = !g_Wireframe;
             renderer.SetWireframe(g_Wireframe);
-
-            std::cout << "TC: Wireframe "
-                      << (g_Wireframe ? "ON" : "OFF")
-                      << '\n';
         }
 
         g_WireframeKeyWasPressed = wireframePressed;
 
-        // Camera reset.
         bool resetPressed =
             glfwGetKey(nativeWindow, GLFW_KEY_R) == GLFW_PRESS;
 
@@ -357,19 +411,13 @@ int main()
         {
             camera.Reset();
             g_FirstMouse = true;
-
-            std::cout << "TC: Camera reset\n";
         }
 
         g_ResetKeyWasPressed = resetPressed;
 
         int width, height;
 
-        glfwGetFramebufferSize(
-            nativeWindow,
-            &width,
-            &height
-        );
+        glfwGetFramebufferSize(nativeWindow, &width, &height);
 
         if (width > 0 && height > 0)
         {
@@ -379,22 +427,40 @@ int main()
                 static_cast<float>(width) /
                 static_cast<float>(height);
 
+            TC::SceneObject* selected =
+                scene.GetObject(g_SelectedObject);
+
+            if (selected && !g_RightMouseDown)
+                UpdateGizmoHover(nativeWindow);
+
             renderer.Render(
                 camera,
                 scene,
                 aspectRatio,
                 g_SelectedObject
             );
+
+            if (selected &&
+                selected->GetType() == TC::PrimitiveType::Cube)
+            {
+                gizmo.Render(
+                    camera,
+                    selected->GetPosition(),
+                    aspectRatio
+                );
+            }
         }
 
         glfwSwapBuffers(nativeWindow);
         glfwPollEvents();
     }
 
+    gizmo.Shutdown();
     renderer.Shutdown();
 
     g_Camera = nullptr;
     g_Scene = nullptr;
+    g_Gizmo = nullptr;
 
     std::cout << "TC: Application shutting down!\n";
 
