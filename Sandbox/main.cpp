@@ -7,6 +7,7 @@
 
 #include "Platform/Window.h"
 #include "Camera/Camera.h"
+#include "Scene/Scene.h"
 #include "Renderer/Renderer.h"
 
 namespace
@@ -15,44 +16,39 @@ namespace
 
     bool g_FirstMouse = true;
 
-    double g_LastMouseX = 0.0;
-    double g_LastMouseY = 0.0;
+    float g_LastX = 640.0f;
+    float g_LastY = 360.0f;
 
     void MouseCallback(
         GLFWwindow* window,
         double xpos,
-        double ypos)
+        double ypos
+    )
     {
         if (!g_Camera)
             return;
 
         if (g_FirstMouse)
         {
-            g_LastMouseX = xpos;
-            g_LastMouseY = ypos;
+            g_LastX = static_cast<float>(xpos);
+            g_LastY = static_cast<float>(ypos);
             g_FirstMouse = false;
-            return;
         }
 
-        float xOffset =
-            static_cast<float>(xpos - g_LastMouseX);
+        float xOffset = static_cast<float>(xpos) - g_LastX;
+        float yOffset = g_LastY - static_cast<float>(ypos);
 
-        float yOffset =
-            static_cast<float>(g_LastMouseY - ypos);
+        g_LastX = static_cast<float>(xpos);
+        g_LastY = static_cast<float>(ypos);
 
-        g_LastMouseX = xpos;
-        g_LastMouseY = ypos;
-
-        g_Camera->ProcessMouseMovement(
-            xOffset,
-            yOffset
-        );
+        g_Camera->ProcessMouseMovement(xOffset, yOffset);
     }
 
     void ScrollCallback(
         GLFWwindow* window,
         double xOffset,
-        double yOffset)
+        double yOffset
+    )
     {
         if (g_Camera)
         {
@@ -65,12 +61,11 @@ namespace
     void ProcessInput(
         GLFWwindow* window,
         TC::Camera& camera,
-        float deltaTime)
+        float deltaTime
+    )
     {
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-        {
             glfwSetWindowShouldClose(window, true);
-        }
 
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
             camera.ProcessKeyboard(TC::CameraMovement::Forward, deltaTime);
@@ -96,116 +91,85 @@ int main()
 {
     TC::Window window;
 
-    if (!window.Create(
-        1280,
-        720,
-        "TC - 3D Development Platform"))
-    {
+    if (!window.Create(1280, 720, "TC - 3D Development Platform"))
         return -1;
-    }
 
     GLFWwindow* nativeWindow = window.GetNativeWindow();
 
     TC::Camera camera;
-
     g_Camera = &camera;
+
+    TC::Scene scene;
 
     TC::Renderer renderer;
 
     if (!renderer.Initialize())
     {
-        g_Camera = nullptr;
+        std::cerr << "Renderer initialization failed!\n";
         return -1;
     }
 
-    // Capture mouse cursor
     glfwSetInputMode(
         nativeWindow,
         GLFW_CURSOR,
         GLFW_CURSOR_DISABLED
     );
 
-    glfwSetCursorPosCallback(
-        nativeWindow,
-        MouseCallback
-    );
+    glfwSetCursorPosCallback(nativeWindow, MouseCallback);
+    glfwSetScrollCallback(nativeWindow, ScrollCallback);
 
-    glfwSetScrollCallback(
-        nativeWindow,
-        ScrollCallback
-    );
+    std::cout << "TC Milestone 0.5\n";
+    std::cout << "WASD: Move | Mouse: Look | Scroll: Zoom\n";
+    std::cout << "Space/Ctrl: Up/Down | F: Wireframe | R: Reset\n";
 
-    std::cout << "\n";
-    std::cout << "================================\n";
-    std::cout << "       TC 0.4.1 - CAMERA\n";
-    std::cout << "================================\n";
-    std::cout << "WASD       - Move camera\n";
-    std::cout << "SPACE      - Move upward\n";
-    std::cout << "CTRL       - Move downward\n";
-    std::cout << "MOUSE      - Look around\n";
-    std::cout << "SCROLL     - Zoom\n";
-    std::cout << "F          - Toggle wireframe\n";
-    std::cout << "R          - Reset camera\n";
-    std::cout << "ESC        - Exit\n";
-    std::cout << "================================\n\n";
+    float lastFrame = 0.0f;
 
-    double lastFrame = glfwGetTime();
+    bool wireframeKeyWasPressed = false;
+    bool resetKeyWasPressed = false;
 
-    bool wireframe = false;
-    bool previousF = false;
-    bool previousR = false;
-
-    while (!window.ShouldClose())
+    while (!glfwWindowShouldClose(nativeWindow))
     {
-        double currentFrame = glfwGetTime();
+        float currentFrame = static_cast<float>(glfwGetTime());
 
-        float deltaTime =
-            static_cast<float>(currentFrame - lastFrame);
-
+        float deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
-        // Prevent unusually large movement after pauses
         if (deltaTime > 0.1f)
             deltaTime = 0.1f;
 
-        ProcessInput(
-            nativeWindow,
-            camera,
-            deltaTime
-        );
+        ProcessInput(nativeWindow, camera, deltaTime);
 
-        // Toggle wireframe
-        bool currentF =
+        bool wireframePressed =
             glfwGetKey(nativeWindow, GLFW_KEY_F) == GLFW_PRESS;
 
-        if (currentF && !previousF)
+        if (wireframePressed && !wireframeKeyWasPressed)
         {
+            static bool wireframe = false;
             wireframe = !wireframe;
+
             renderer.SetWireframe(wireframe);
 
             std::cout << "TC: Wireframe "
                       << (wireframe ? "ON" : "OFF")
-                      << "\n";
+                      << '\n';
         }
 
-        previousF = currentF;
+        wireframeKeyWasPressed = wireframePressed;
 
-        // Reset camera
-        bool currentR =
+        bool resetPressed =
             glfwGetKey(nativeWindow, GLFW_KEY_R) == GLFW_PRESS;
 
-        if (currentR && !previousR)
+        if (resetPressed && !resetKeyWasPressed)
         {
             camera.Reset();
+            g_FirstMouse = true;
 
             std::cout << "TC: Camera reset\n";
         }
 
-        previousR = currentR;
+        resetKeyWasPressed = resetPressed;
 
-        // Dynamic viewport and aspect ratio
-        int width = 0;
-        int height = 0;
+        int width, height;
 
         glfwGetFramebufferSize(
             nativeWindow,
@@ -221,14 +185,11 @@ int main()
                 static_cast<float>(width) /
                 static_cast<float>(height);
 
-            renderer.Render(
-                camera,
-                aspectRatio
-            );
+            renderer.Render(camera, scene, aspectRatio);
         }
 
-        window.SwapBuffers();
-        window.PollEvents();
+        glfwSwapBuffers(nativeWindow);
+        glfwPollEvents();
     }
 
     renderer.Shutdown();

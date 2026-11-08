@@ -16,19 +16,18 @@ namespace TC
 
     bool Shader::LoadFromFiles(
         const std::string& vertexPath,
-        const std::string& fragmentPath)
+        const std::string& fragmentPath
+    )
     {
         auto ReadFile = [](const std::string& path)
         {
             std::ifstream file(path);
             std::stringstream buffer;
 
-            if (!file)
+            if (!file.is_open())
             {
-                std::cerr << "TC: Cannot open shader: "
-                          << path << "\n";
-
-                return std::string{};
+                std::cerr << "Failed to open shader: "
+                          << path << '\n';
             }
 
             buffer << file.rdbuf();
@@ -51,66 +50,77 @@ namespace TC
             glCompileShader(shader);
 
             GLint success = 0;
-
             glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
 
             if (!success)
             {
-                char info[512];
+                char infoLog[512];
 
                 glGetShaderInfoLog(
-                    shader, 512, nullptr, info
+                    shader,
+                    512,
+                    nullptr,
+                    infoLog
                 );
 
-                std::cerr << "TC: Shader compilation failed:\n"
-                          << info << "\n";
+                std::cerr << "Shader compilation failed:\n"
+                          << infoLog << '\n';
 
                 glDeleteShader(shader);
-
                 return GLuint(0);
             }
 
             return shader;
         };
 
-        GLuint vertex = Compile(GL_VERTEX_SHADER, vertexSource);
-        GLuint fragment = Compile(GL_FRAGMENT_SHADER, fragmentSource);
+        GLuint vertexShader =
+            Compile(GL_VERTEX_SHADER, vertexSource);
 
-        if (!vertex || !fragment)
+        if (!vertexShader)
+            return false;
+
+        GLuint fragmentShader =
+            Compile(GL_FRAGMENT_SHADER, fragmentSource);
+
+        if (!fragmentShader)
         {
-            if (vertex) glDeleteShader(vertex);
-            if (fragment) glDeleteShader(fragment);
-
+            glDeleteShader(vertexShader);
             return false;
         }
 
         GLuint program = glCreateProgram();
 
-        glAttachShader(program, vertex);
-        glAttachShader(program, fragment);
+        glAttachShader(program, vertexShader);
+        glAttachShader(program, fragmentShader);
 
         glLinkProgram(program);
 
         GLint success = 0;
 
-        glGetProgramiv(program, GL_LINK_STATUS, &success);
+        glGetProgramiv(
+            program,
+            GL_LINK_STATUS,
+            &success
+        );
 
-        glDeleteShader(vertex);
-        glDeleteShader(fragment);
+        glDeleteShader(vertexShader);
+        glDeleteShader(fragmentShader);
 
         if (!success)
         {
-            char info[512];
+            char infoLog[512];
 
             glGetProgramInfoLog(
-                program, 512, nullptr, info
+                program,
+                512,
+                nullptr,
+                infoLog
             );
 
-            std::cerr << "TC: Shader linking failed:\n"
-                      << info << "\n";
+            std::cerr << "Shader linking failed:\n"
+                      << infoLog << '\n';
 
             glDeleteProgram(program);
-
             return false;
         }
 
@@ -118,8 +128,6 @@ namespace TC
             glDeleteProgram(m_Program);
 
         m_Program = program;
-
-        std::cout << "TC: Shader loaded successfully!\n";
 
         return true;
     }
@@ -131,12 +139,11 @@ namespace TC
 
     void Shader::SetMat4(
         const std::string& name,
-        const glm::mat4& matrix) const
+        const glm::mat4& matrix
+    ) const
     {
-        GLint location = glGetUniformLocation(
-            m_Program,
-            name.c_str()
-        );
+        GLint location =
+            glGetUniformLocation(m_Program, name.c_str());
 
         if (location == -1)
             return;
@@ -147,5 +154,51 @@ namespace TC
             GL_FALSE,
             glm::value_ptr(matrix)
         );
+    }
+
+    void Shader::SetVec3(
+        const std::string& name,
+        const glm::vec3& value
+    ) const
+    {
+        GLint location =
+            glGetUniformLocation(m_Program, name.c_str());
+
+        if (location == -1)
+            return;
+
+        glUniform3fv(
+            location,
+            1,
+            glm::value_ptr(value)
+        );
+    }
+
+    void Shader::SetFloat(
+        const std::string& name,
+        float value
+    ) const
+    {
+        GLint location =
+            glGetUniformLocation(m_Program, name.c_str());
+
+        if (location == -1)
+            return;
+
+        glUniform1f(location, value);
+    }
+
+    void Shader::SetInt(
+        const std::string& name,
+        int value
+    ) const
+    {
+        GLint location =
+            glGetUniformLocation(m_Program, name.c_str());
+
+        if (location == -1)
+            return;
+
+        glUniform1i(location, value);
     }
 }
